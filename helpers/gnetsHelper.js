@@ -2,8 +2,9 @@ import axios from 'axios';
 import debug from 'debug';
 import fs from 'fs';
 import path from 'path';
-import { getPreviousInhouseDc, upsertDirectory } from '../knowhow';
+import { upsertDirectory } from '../knowhow';
 import { CSS_SELECTOR } from './constants/drawingFileConstants';
+import { getPreviousInhouseDc } from './drawingFileHelper';
 import Web from './webHelper';
 
 export const TEMP_FOLDER = './temp';
