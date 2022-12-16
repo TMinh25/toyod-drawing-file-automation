@@ -1,7 +1,8 @@
 import axios from 'axios';
+import debug from 'debug';
 import fs from 'fs';
 import path from 'path';
-import { upsertDirectory } from '../knowhow';
+import { getPreviousInhouseDc, upsertDirectory } from '../knowhow';
 import { CSS_SELECTOR } from './constants/drawingFileConstants';
 import Web from './webHelper';
 
@@ -18,6 +19,8 @@ export const AVERAGE_LOGIN_DURATION = 0;
 export const AVERAGE_DOWNLOAD_DURATION = 500;
 
 const { LOGIN_SCREEN } = CSS_SELECTOR;
+
+const autoBotDebugger = debug('app:bot');
 
 export default class GnetHelper extends Web {
   constructor(web = {}) {
@@ -128,7 +131,8 @@ export default class GnetHelper extends Web {
       await popupPage.waitForTimeout(5000);
       const downloadRes = await axios.get(this.DRAWING_DOWLOAD_URL, this.downloadFileOptions);
 
-      const inhouseDcFolder = path.join(todayTempDirectory, inhouseDc);
+      const inhouseDcFolder = path.resolve(todayTempDirectory, inhouseDc);
+      drawing.dir = inhouseDcFolder;
       const drawingFilePath = path.resolve(`${inhouseDcFolder}/drawing.pdf`);
       upsertDirectory(inhouseDcFolder);
       fs.writeFileSync(drawingFilePath, downloadRes.data);
@@ -143,7 +147,7 @@ export default class GnetHelper extends Web {
         buffer: downloadRes.data,
       };
     } catch (error) {
-      console.error(error);
+      autoBotDebugger(error);
     }
   }
 
@@ -155,7 +159,30 @@ export default class GnetHelper extends Web {
       fs.writeFileSync(`${fullFilePath}/drn.pdf`, drnFile.data);
       return `${fullFilePath}/drn.pdf`;
     } catch (error) {
-      console.error(`Can not download drnFile: ${error}`);
+      autoBotDebugger(`Can not download drnFile: ${error}`);
+    }
+  }
+
+  async getPreviousDrn(drawing) {
+    try {
+      const { prevDrawing, dir, inhouseDc } = drawing;
+      let prevInhouseDc;
+      if (!prevDrawing) {
+        prevInhouseDc = getPreviousInhouseDc(inhouseDc);
+      } else {
+        prevInhouseDc = getPreviousInhouseDc(prevDrawing.inhouseDc);
+      }
+
+      const prevDrawingBuffer = await axios.get(`http://cad-sv01:7001/gnets/viewdrn.do?inhouseDc=${prevInhouseDc}`, this.downloadFileOptions);
+      fs.writeFileSync(path.resolve(dir, `prevDrn.pdf`), prevDrawingBuffer.data);
+
+      return {
+        filePath: path.resolve(dir, `prevDrn.pdf`),
+        buffer: prevDrawingBuffer.data,
+        inhouseDc: prevInhouseDc,
+      };
+    } catch (err) {
+      autoBotDebugger(err);
     }
   }
 }

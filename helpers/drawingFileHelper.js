@@ -1,7 +1,7 @@
 import debug from 'debug';
 import { countBy, round } from 'lodash';
 import { OEM, PSM } from 'tesseract.js';
-import { daysBetween } from '../knowhow.js';
+import { daysBetween, stringEqual } from '../knowhow';
 import {
   ANGLE_CHECKING_STEP,
   ASSEMBLY_ROW_INDEX,
@@ -21,18 +21,17 @@ import {
   PDF_ZOOM_RATIO,
   SHIPPING_ROW_INDEX,
   TABLE_REGION,
-  WHITE_PIXEL_RATE,
-} from './constants/drawingFileConstants.js';
-import ImageHelper from './imageHelper.js';
-import OCRHelper from './ocrHelper.js';
-import PDFHelper from './pdfHelper.js';
-import WebHelper from './webHelper.js';
+  WHITE_PIXEL_RATE
+} from './constants/drawingFileConstants';
+import ImageHelper from './imageHelper';
+import OCRHelper from './ocrHelper';
+import PDFHelper from './pdfHelper';
 
-const appBizDebugger = debug('app:biz');
+const autoBotDebugger = debug('app:bot');
 
 const TO_BASE64 = true;
 
-function getPreviousInhouseDc(inhouseDc) {
+export function getPreviousInhouseDc(inhouseDc) {
   const codeNumberCount = 3;
   const codeRegex = /(-\d{3})$/;
 
@@ -44,78 +43,45 @@ function getPreviousInhouseDc(inhouseDc) {
   }
 }
 
-export async function getPreviousDrn(file, sessionId) {
-  try {
-    const { prevDrawing, dir } = file;
-    const prevInhouseDc = getPreviousInhouseDc(prevDrawing.inhouseDc);
-
-    const downloadOptions = {
-      responseType: 'arraybuffer',
-      headers: {
-        Accept: 'image/jpeg, application/x-ms-application, image/gif, application/xaml+xml, image/pjpeg, application/x-ms-xbap, */*',
-        'Accept-Encoding': 'gzip, deflate',
-        'Accept-Language': 'en-US',
-        'User-Agent': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.3; WOW64; Trident/7.0; .NET4.0E; .NET4.0C; Tablet PC 2.0)',
-        Connection: 'Keep-Alive',
-        Cookie: `JSESSIONID=${sessionId}`,
-      },
-    };
-
-    const prevDrawingRes = await axios.get(`http://cad-sv01:7001/gnets/viewdrn.do?inhouseDc=${prevInhouseDc}`, downloadOptions);
-    fs.writeFileSync(`${dir}/prevDrn.pdf`, prevDrawing.data);
-
-    file.prevDrawing = {
-      filePath: `${dir}/prevDrn.pdf`,
-      buffer: prevDrawingRes.data,
-      inhouseDc: prevInhouseDc,
-    };
-  } catch (err) {
-    console.error(err);
+export async function checkFactoryDrawingOnTings(drawing, webHelper) {
+  const { partNo, releaseDate } = drawing;
+  if (!partNo) {
+    return undefined;
   }
-}
 
-export async function checkFactoryDrawingOnTings(drawing) {
-  const { inhouseDc, partNo, releaseDate } = drawing;
-  console.log(drawing);
-
-  // const browser = await puppeteer.launch({
-  //   headless: false,
-  //   args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  //   ignoreHTTPSErrors: true,
-  // });
-  // const web = await browser.newPage();
-  // await web.setViewport({
-  //   width: 1920,
-  //   height: 1080,
-  //   deviceScaleFactor: 1,
-  // });
-  const web = new WebHelper();
-  await web.goto(`https://tings.toyo-denso.co.jp/main/itemSearch/form/`);
-  await web.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partNo);
-  const searchButton = await web.$(CSS_SELECTOR.TINGS.SEARCH_BUTTON);
+  const tingsPage = await webHelper.browser.newPage()
+  await tingsPage.goto(`https://tings.toyo-denso.co.jp/main/itemSearch/form/`);
+  await tingsPage.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partNo);
+  const searchButton = await tingsPage.$(CSS_SELECTOR.TINGS.SEARCH_BUTTON);
   await searchButton.click();
-  await web.waitForTimeout(10000);
-  const rows = await web.$$(CSS_SELECTOR.TINGS.TABLE_ROWS);
+  await tingsPage.waitForTimeout(10000);
+  const rows = await tingsPage.$$(CSS_SELECTOR.TINGS.TABLE_ROWS);
 
-  let closestDate, site;
-  for (const row of rows) {
-    const partNoCell = await row.$('td:nth-child(2)');
-    const partNoValue = String(await (await partNoCell.getProperty('innerText')).jsonValue());
-    const createDateCell = await row.$('td:nth-child(8)');
-    const createDateValue = String(await (await createDateCell.getProperty('innerText')).jsonValue());
+  if (rows.length > 0) {
+    let closestDate, site;
+    for (const row of rows) {
+      const partNoCell = await row.$('td:nth-child(2)');
+      const partNoValue = String(await (await partNoCell.getProperty('innerText')).jsonValue());
+      const createDateCell = await row.$('td:nth-child(8)');
+      const createDateValue = String(await (await createDateCell.getProperty('innerText')).jsonValue());
 
-    const daysBetweenCreateDate = daysBetween(createDateValue, releaseDate);
-    if (partNoValue === partNo && daysBetweenCreateDate <= closestDate) {
-      closestDate = daysBetweenCreateDate;
-      const siteCell = await row.$('td:nth-child(10)');
-      const siteValue = String(await (await siteCell.getProperty('innerText')).jsonValue());
+      const daysBetweenCreateDate = daysBetween(createDateValue, releaseDate);
+      if (stringEqual(partNoValue, partNo) && (daysBetweenCreateDate <= closestDate || !closestDate)) {
+        closestDate = daysBetweenCreateDate;
+        const siteCell = await row.$('td:nth-child(10)');
+        const siteValue = String(await (await siteCell.getProperty('innerText')).jsonValue());
 
-      site = siteValue.slice(0, 1) + 'T';
+        site = String(siteValue.slice(0, 1) + 'T').toUpperCase();
+      }
     }
-  }
 
-  console.log(site);
-  return site;
+    autoBotDebugger({ site });
+    return { factory: site, checked: true, isVNTec: site === 'VT' };
+  }
+  else {
+    autoBotDebugger("No tings result found!");
+    return undefined;
+  }
 }
 
 export async function checkFactoryDrawingByFile(fullFilePath) {
@@ -162,10 +128,10 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
     const firstRowRegion = tableRegion.filter((r) => r.rowIndex === 1);
 
     if (firstRowRegion.length) {
-      appBizDebugger(`Segmented ${tableRegion.length} (region) with angle ${angle} => OK`);
+      autoBotDebugger(`Segmented ${tableRegion.length} (region) with angle ${angle} => OK`);
       break;
     } else {
-      appBizDebugger(`Can't segment with angle ${angle} => Retry with next angle`);
+      autoBotDebugger(`Can't segment with angle ${angle} => Retry with next angle`);
     }
   }
   // const vendorRegionList = tableRegion.filter((region) => region.rowIndex === 1 && region.cellIndex !== 0);
@@ -251,10 +217,10 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
   }
 
   if (topY >= TABLE_HEIGHT / 2) {
-    appBizDebugger(`segmentInfoRegion: Can't find out topY!`);
+    autoBotDebugger(`segmentInfoRegion: Can't find out topY!`);
     return [];
   } else {
-    appBizDebugger(`segmentInfoRegion: topY 's founded: ${topY}`);
+    autoBotDebugger(`segmentInfoRegion: topY 's founded: ${topY}`);
   }
 
   for (topX = 0; topX < TABLE_WIDTH / 2; topX += 1) {
@@ -270,10 +236,10 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
   }
 
   if (topX >= TABLE_WIDTH / 2) {
-    appBizDebugger(`segmentInfoRegion: Can't find out topX!`);
+    autoBotDebugger(`segmentInfoRegion: Can't find out topX!`);
     return [];
   } else {
-    appBizDebugger(`segmentInfoRegion: topX 's founded: ${topX}`);
+    autoBotDebugger(`segmentInfoRegion: topX 's founded: ${topX}`);
   }
 
   const tableRegion = [];
@@ -340,7 +306,7 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
       }
 
       if (!cellIndex) {
-        appBizDebugger(`segmentInfoRegion: Can't segment row ${rowIndex}!`);
+        autoBotDebugger(`segmentInfoRegion: Can't segment row ${rowIndex}!`);
       }
     }
   }
@@ -348,7 +314,7 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
   tesseractOcr.terminate();
 
   if (!rowIndex) {
-    appBizDebugger(`segmentInfoRegion: Can't find out any row!`);
+    autoBotDebugger(`segmentInfoRegion: Can't find out any row!`);
   }
 
   return {
@@ -367,37 +333,37 @@ async function cropRegion(buffer, left, top, width, height, angle) {
   const { width: IMAGE_WIDTH, height: IMAGE_HEIGHT } = await tmpImg.getMetadata();
 
   if (width < 0) {
-    appBizDebugger(`Doma_Helper.cropRegion: width = ${width} < 0 => Wrong crop region`);
+    autoBotDebugger(`Doma_Helper.cropRegion: width = ${width} < 0 => Wrong crop region`);
 
     // throw new Error(RPA_ERROR.WRONG_CROP_REGION);
   }
 
   if (height < 0) {
-    appBizDebugger(`Doma_Helper.cropRegion: height = ${height} < 0 => Wrong crop region`);
+    autoBotDebugger(`Doma_Helper.cropRegion: height = ${height} < 0 => Wrong crop region`);
 
     // throw new Error(RPA_ERROR.WRONG_CROP_REGION);
   }
 
   if (left > IMAGE_WIDTH) {
-    appBizDebugger(`Doma_Helper.cropRegion: left = ${left} > IMAGE_WIDTH: ${IMAGE_WIDTH} => Wrong crop region`);
+    autoBotDebugger(`Doma_Helper.cropRegion: left = ${left} > IMAGE_WIDTH: ${IMAGE_WIDTH} => Wrong crop region`);
 
     // throw new Error(RPA_ERROR.WRONG_CROP_REGION);
   }
 
   if (top > IMAGE_HEIGHT) {
-    appBizDebugger(`Doma_Helper.cropRegion: top = ${top} > IMAGE_HEIGHT: ${IMAGE_HEIGHT} => Wrong crop region`);
+    autoBotDebugger(`Doma_Helper.cropRegion: top = ${top} > IMAGE_HEIGHT: ${IMAGE_HEIGHT} => Wrong crop region`);
 
     // throw new Error(RPA_ERROR.WRONG_CROP_REGION);
   }
 
   if (left + width > IMAGE_WIDTH) {
-    appBizDebugger(`Doma_Helper.cropRegion: left + width = ${left + width} > IMAGE_WIDTH: ${IMAGE_WIDTH} => Wrong crop region`);
+    autoBotDebugger(`Doma_Helper.cropRegion: left + width = ${left + width} > IMAGE_WIDTH: ${IMAGE_WIDTH} => Wrong crop region`);
 
     // throw new Error(RPA_ERROR.WRONG_CROP_REGION);
   }
 
   if (top + height > IMAGE_HEIGHT) {
-    appBizDebugger(`Doma_Helper.cropRegion: top + height = ${top + height} > IMAGE_HEIGHT: ${IMAGE_HEIGHT} => Wrong crop region`);
+    autoBotDebugger(`Doma_Helper.cropRegion: top + height = ${top + height} > IMAGE_HEIGHT: ${IMAGE_HEIGHT} => Wrong crop region`);
 
     // throw new Error(RPA_ERROR.WRONG_CROP_REGION);
   }

@@ -50,8 +50,8 @@ export const CSS_SELECTOR = {
 
   TINGS: {
     TABLE_ROWS: '#main > table.resTab > tbody > tr:not(:first-child)',
-    PART_NO_INPUT: '',
-    SEARCH_BUTTON: '',
+    PART_NO_INPUT: '#main input[name=partNo]',
+    SEARCH_BUTTON: '#main input[name=search]',
     P_NO_NUMBER: '',
     SITE_CELLS: '',
   },

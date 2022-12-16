@@ -1,12 +1,48 @@
+import { execSync } from 'child_process';
+import { format } from 'date-and-time';
+import debug from 'debug';
 import fs from 'fs';
-import moment from 'moment';
 import path from 'path';
-import { emptyCellBorder, emptyCellStyle } from './helpers/constants/excelConstant';
-import { Excel } from './helpers';
-import { DEBUG_FOLDER } from './helpers/constants/drawingFileConstants';
-import SMTP from './helpers/smtpHelper';
-import { getHeadersXLSX } from './helpers/excelHelper';
 import { readFile, utils } from 'xlsx';
+import { Excel } from './helpers';
+import { emptyCellBorder, emptyCellStyle } from './helpers/constants/excelConstant';
+import { getHeadersXLSX } from './helpers/excelHelper';
+import SMTP from './helpers/smtpHelper';
+
+const autoBotDebugger = debug('app:bot');
+
+export const stringEqual = (s1, s2) => String(s1).toLowerCase().trim() === String(s2).toLowerCase().trim();
+
+export const mountExternalFolder = async (mountFolderPath, mountedLocation, mountUsername, mountPassword) => {
+  try {
+    let mountGrepResponse = execSync(`mount | grep ${mountFolderPath}`).toString("utf-8");
+
+    const mountedPath = mountGrepResponse.split('type')[0].split('on')[1].trim();
+    autoBotDebugger(`Target folder is mounted at: ${mountedPath}`);
+
+    if (mountedPath.length > 0) {
+      autoBotDebugger("Drive mounted!");
+      return true;
+    }
+
+    if (mountedPath.length === 0) {
+      try {
+        autoBotDebugger("Drive isn't mounted, trying to mount it...");
+
+        execSync(`sudo mount -t cifs -o username=${mountUsername},password=${mountPassword} ${mountFolderPath}`);
+      } catch (error) {
+        autoBotDebugger("Host unavailable, trying again in 5 seconds...");
+        await sleep(5000) //stop the excution for the given seconds;
+        return false;
+      }
+    }
+  } catch (error) {
+    autoBotDebugger("Failed to mount drive: " + error);
+    return false;
+  }
+}
+
+export const startOfDay = (date) => new Date(new Date(date).setHours(0, 0, 0, 0))
 
 export const daysBetween = (d1, d2) => {
   // The number of milliseconds in one day
@@ -15,16 +51,12 @@ export const daysBetween = (d1, d2) => {
   d1 = startOfDay(d1);
   d2 = startOfDay(d2);
 
-  if (equalToDate(d1, d2)) {
-    return 0;
-  }
-
-  return Math.floor((d2 - d1) / oneDay) - 1;
+  return Math.abs(Math.floor((d2 - d1) / oneDay));
 };
 
-export function removeFolderForce(folderPath) {
+export function removeFolder(folderPath, options) {
   if (fs.existsSync(folderPath)) {
-    fs.rmSync(folderPath, { recursive: true, force: true });
+    fs.rmSync(folderPath, { recursive: true, ...options });
   }
 }
 
@@ -86,7 +118,7 @@ export function getTodayExcelData(excelFilePath) {
     }
     return { drawing, mergeRows };
   } catch (error) {
-    console.error({ error });
+    autoBotDebugger({ error });
   }
 }
 
@@ -99,7 +131,7 @@ export async function getTodayExcelWithSite(data, mergeRows) {
   for (const row of Array.from(data).reverse()) {
     // TODO: change site cell color for more vibrant cell
     // can change cell color after insertRow
-    // if (row.site === 'VNTEC') {
+    // if (row.factory === 'VT') {
     //   worksheet.getCell(`V${rowIndex}`).fill = {
     //     fgColor: { argb: 'F0F0F0F0' },
     //   };
@@ -147,24 +179,25 @@ export async function getTodayExcelWithSite(data, mergeRows) {
   return buffer;
 }
 
-export const getDaysByMonth = (month) => {
-  const daysInMonth = moment({ month }).daysInMonth();
-  return Array.from({ length: daysInMonth }, (v, k) => k + 1);
+var getDaysInMonth = function (month, year) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  return Array.from({ length: daysInMonth }, (v, k) => k + 1)
 };
 
-export async function sendMail(NOREPLY_MAIL_SMTP, EMAIL_NOTIFICATION, data) {
+export async function sendMail(NOREPLY_MAIL_SMTP, sendTo, data) {
   const smtp = new SMTP(NOREPLY_MAIL_SMTP);
   const { mailSubject, mailBody, attachments } = data;
-  smtp.send(EMAIL_NOTIFICATION, [], mailSubject, mailBody, attachments, async (err, info) => {
+  smtp.send(sendTo, [], mailSubject, mailBody, attachments, async (err, info) => {
     if (err) {
-      console.log(`Error when trying to send email: ${err}`);
+      autoBotDebugger(`Error when trying to send email: ${err}`);
     }
-    console.log('Send mail success!', info);
+    autoBotDebugger('Send mail success!', info);
   });
 }
 
 export async function getCheckDrawingExcel(result, performer, poChecker) {
-  const currentMonth = moment().month();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
 
   const checkExcel = result.map((data) => ({
     ...data,
@@ -217,10 +250,10 @@ export async function getCheckDrawingExcel(result, performer, poChecker) {
     ];
     sheet.insertRow(rIndex + 4, rowData, 'o+');
   }
-  const totalRowIndex = getDaysByMonth(currentMonth).length + 3;
+  const totalRowIndex = getDaysInMonth(currentMonth, currentYear).length + 3;
   const totalRow = sheet.getRow(totalRowIndex + 2);
 
-  totalRow.getCell(1).value = moment().format('[Total] TM/YYYY');
+  totalRow.getCell(1).value = format(new Date(), '[Total] TM/YYYY');
   totalRow.getCell(2).value = { formula: `SUM(B4: B${totalRowIndex})` };
   totalRow.getCell(3).value = { formula: `SUM(C4: C${totalRowIndex})` };
   totalRow.getCell(4).value = { formula: `SUM(D4: D${totalRowIndex})` };
@@ -229,6 +262,6 @@ export async function getCheckDrawingExcel(result, performer, poChecker) {
   totalRow.getCell(7).value = { formula: `SUM(G4: G${totalRowIndex})` };
   totalRow.getCell(8).value = { formula: `SUM(H4: H${totalRowIndex})` };
   totalRow.getCell(9).value = { formula: `SUM(I4: I${totalRowIndex})` };
-  await excel.writeFile('./debug/test-report.xlsx');
+  // await excel.writeFile('./debug/test-report.xlsx');
   return excel;
 }
