@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import { format } from 'date-and-time';
 import debug from 'debug';
 import fs from 'fs';
+import fse from 'fs-extra';
 import path from 'path';
 import { readFile, utils } from 'xlsx';
 import { Excel } from './helpers';
@@ -9,7 +10,7 @@ import { emptyCellBorder, emptyCellStyle } from './helpers/constants/excelConsta
 import { getHeadersXLSX } from './helpers/excelHelper';
 import SMTP from './helpers/smtpHelper';
 
-const autoBotDebugger = debug('app:bot');
+const appBizDebugger = debug('app:biz');
 
 export const stringEqual = (s1, s2) => String(s1).toLowerCase().trim() === String(s2).toLowerCase().trim();
 
@@ -18,26 +19,26 @@ export const mountExternalFolder = async (mountFolderPath, mountedLocation, moun
     let mountGrepResponse = execSync(`mount | grep ${mountFolderPath}`).toString("utf-8");
 
     const mountedPath = mountGrepResponse.split('type')[0].split('on')[1].trim();
-    autoBotDebugger(`Target folder is mounted at: ${mountedPath}`);
+    appBizDebugger(`Target folder is mounted at: ${mountedPath}`);
 
     if (mountedPath.length > 0) {
-      autoBotDebugger("Drive mounted!");
+      appBizDebugger("Drive mounted!");
       return true;
     }
 
     if (mountedPath.length === 0) {
       try {
-        autoBotDebugger("Drive isn't mounted, trying to mount it...");
+        appBizDebugger("Drive isn't mounted, trying to mount it...");
 
         execSync(`sudo mount -t cifs -o username=${mountUsername},password=${mountPassword} ${mountFolderPath}`);
       } catch (error) {
-        autoBotDebugger("Host unavailable, trying again in 5 seconds...");
+        appBizDebugger("Host unavailable, trying again in 5 seconds...");
         await sleep(5000) //stop the excution for the given seconds;
         return false;
       }
     }
   } catch (error) {
-    autoBotDebugger("Failed to mount drive: " + error);
+    appBizDebugger("Failed to mount drive: " + error);
     return false;
   }
 }
@@ -60,12 +61,13 @@ export function removeFolder(folderPath, options) {
   }
 }
 
-export function upsertDirectory(folderPath) {
-  if (!fs.existsSync(folderPath)) {
-    fs.mkdirSync(folderPath);
+export async function upsertDirectory(folderPath) {
+  if (!fse.existsSync(folderPath)) {
+    await fse.ensureDir(folderPath);
+    fse.chmodSync(folderPath, '777');
   } else {
-    fs.rmSync(folderPath, { recursive: true, force: true });
-    fs.mkdirSync(folderPath);
+    fse.rmSync(folderPath, { recursive: true, force: true });
+    await fse.ensureDir(folderPath);
   }
 }
 
@@ -86,7 +88,7 @@ export function getTodayExcelData(excelFilePath) {
     for (const row of excelData) {
       drawing.push({
         received: row[headers[0]],
-        // received: Boolean(row[headers[0]]) ? '✓' : undefined,
+        isReceived: Boolean(row[headers[0]]),
         inhouseDc: row[headers[1]],
         customerDc: row[headers[2]],
         aKeyNo: row[headers[3]],
@@ -118,7 +120,7 @@ export function getTodayExcelData(excelFilePath) {
     }
     return { drawing, mergeRows };
   } catch (error) {
-    autoBotDebugger({ error });
+    appBizDebugger({ error });
   }
 }
 
@@ -189,9 +191,9 @@ export async function sendMail(NOREPLY_MAIL_SMTP, sendTo, data) {
   const { mailSubject, mailBody, attachments } = data;
   smtp.send(sendTo, [], mailSubject, mailBody, attachments, async (err, info) => {
     if (err) {
-      autoBotDebugger(`Error when trying to send email: ${err}`);
+      appBizDebugger(`Error when trying to send email: ${err}`);
     }
-    autoBotDebugger('Send mail success!', info);
+    appBizDebugger('Send mail success!', info);
   });
 }
 

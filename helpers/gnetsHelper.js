@@ -1,25 +1,17 @@
 import axios from 'axios';
 import debug from 'debug';
-import fs from 'fs';
+import fse from 'fs-extra';
 import path from 'path';
-import { upsertDirectory } from '../knowhow';
+import { getFilesInFolder, upsertDirectory } from '../knowhow';
 import { CSS_SELECTOR } from './constants/drawingFileConstants';
+import { OPTIMIZED_WEB_VIEWPORT } from './constants/webConstant';
 import { getPreviousInhouseDc } from './drawingFileHelper';
 import Web from './webHelper';
-
-export const TEMP_FOLDER = './temp';
-
-export const SIMULATION_LOGIN_URL = `file://${process.env.PWD}/samples/simulation/login.htm`;
-export const SIMULATION_LOGED_IN_URL = `file://${process.env.PWD}/samples/simulation/loged in.mht`;
-export const SIMULATION_HOME_URL = `file://${process.env.PWD}/samples/simulation/home.mht`;
-export const SIMULATION_NO_RECEIVE_URL = `file://${process.env.PWD}/samples/simulation/noReceiveList.mht`;
-export const SIMULATION_RELEASED_URL = `file://${process.env.PWD}/samples/simulation/home.mht`;
-export const DRAWING_SELECTION_URL = `file://${process.env.PWD}/samples/simulation/drawingSelectionDownload.mht`;
 
 export const AVERAGE_LOGIN_DURATION = 0;
 export const AVERAGE_DOWNLOAD_DURATION = 500;
 
-const { LOGIN_SCREEN } = CSS_SELECTOR;
+const { LOGIN_SCREEN, RELEASED_PAGE_SELECTOR } = CSS_SELECTOR;
 
 const autoBotDebugger = debug('app:bot');
 
@@ -27,11 +19,11 @@ export default class GnetHelper extends Web {
   constructor(web = {}) {
     super();
     this.simulationMode = web.DEV_MODE;
-    this.loginUrl = web.LOGIN_URL;
+    this.gnetsUrl = web.GNETS_URL;
     this.tingsUrl = web.TINGS_URL;
-    this.userName = web.USERNAME;
+    this.LOGIN_PAGE = `${this.gnetsUrl}/login.do`;
+    this.username = web.USERNAME;
     this.password = web.PASSWORD;
-    this.sessionId = '';
     this.downloadFileOptions = {
       responseType: 'arraybuffer',
       headers: {
@@ -54,45 +46,43 @@ export default class GnetHelper extends Web {
 
     const nowUTCString = new Date().toUTCString();
     this.downloadFileOptions.headers.Cookie = `JSESSIONID=${this.sessionId}`;
-    this.VIEW_PRINT_PAGE = `http://cad-sv01:7001/gnets/viewprint.do?inhouseDc={{inhouseDc}}&sessionId=${this.sessionId}`;
-    this.NO_RECEIVED_PAGE = `http://cad-sv01:7001/gnets/receivedlist.do?sessionId=${this.sessionId}`;
-    this.VIEW_FORMAT_POPUP = `http://cad-sv01:7001/gnets/viewformatselect.do?sessionId=${this.sessionId}`;
-    this.DRAWING_DOWLOAD_URL = `http://cad-sv01:7001/gnets/viewprint.do?inhouseDc={{inhouseDc}}&mode=PDF&date=${nowUTCString}&sessionId=${this.sessionId}`;
+    this.VIEW_PRINT_PAGE = `${this.gnetsUrl}/viewprint.do?inhouseDc={{inhouseDc}}&sessionId=${this.sessionId}`;
+    this.RELEASED_PAGE = `${this.gnetsUrl}/released.do?sessionId=${this.sessionId}`
+    this.NO_RECEIVED_PAGE = `${this.gnetsUrl}/noreceivelist.do?sessionId=${this.sessionId}`;
+    this.VIEW_FORMAT_POPUP = `${this.gnetsUrl}/viewformatselect.do?sessionId=${this.sessionId}`;
+    this.DRAWING_DOWNLOAD_URL = `${this.gnetsUrl}/viewprint.do?inhouseDc={{inhouseDc}}&mode=PDF&date=${nowUTCString}&sessionId=${this.sessionId}`;
+    this.VIEW_DRN_PAGE = `${this.gnetsUrl}/viewdrn.do?inhouseDc={{inhouseDc}}`;
   }
 
   async login() {
-    if (!super.isBrowserOpened()) {
-      super.page = await super.browser.newPage();
+    if (!this.isBrowserOpened()) {
+      this.page = await this.browser.newPage();
       // throw new Error("Can't open browser!");
     }
 
     const { USER_NAME, PASSWORD, LOGIN_BUTTON } = LOGIN_SCREEN;
 
-    if (this.simulationMode) {
-      await super.gotoUrl(SIMULATION_LOGIN_URL);
-    } else {
-      await super.gotoUrl(this.loginUrl);
-    }
+    await this.gotoUrl(this.LOGIN_PAGE);
+    await this.type(USER_NAME, this.username);
+    await this.type(PASSWORD, this.password);
 
-    await super.type(USER_NAME, this.userName);
-    await super.type(PASSWORD, this.password);
+    await this.click(LOGIN_BUTTON);
+    await this.waitForTimeout(5000);
 
-    await super.click(LOGIN_BUTTON);
-    await super.waitForTimeout(5000);
-
-    const newPagePromise = new Promise((x) => browser.once('targetcreated', (target) => x(target.page())));
-    const popup = await newPagePromise;
+    const pages = this.browser.pages();
+    const popup = pages[pages.length - 1];
     const url = popup.url();
 
     this.getSessionId(url);
   }
 
   async getTodayExcel(todayTempDirectory) {
-    if (!super.isBrowserOpened()) {
+    if (!this.isBrowserOpened()) {
       this.login();
     }
 
-    const page = await super.browser.newPage();
+    const page = await this.browser.newPage();
+    await page.setViewport(OPTIMIZED_WEB_VIEWPORT);
     await page.goto(this.NO_RECEIVED_PAGE);
     await page._client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: todayTempDirectory });
     const excelDownloadButton = await page.$(CSS_SELECTOR.NORECEIVED_PAGE.DOWNLOAD_EXCEL);
@@ -110,13 +100,15 @@ export default class GnetHelper extends Web {
 
   async downloadDrawingFile(drawing, todayTempDirectory, fileId) {
     try {
-      if (!super.isBrowserOpened()) {
+      if (!this.isBrowserOpened()) {
         this.login();
       }
       const { inhouseDc } = drawing;
 
-      const drnPage = await super.browser.newPage();
-      await drnPage.goto(this.VIEW_PRINT_PAGE);
+      const drnPage = await this.browser.newPage();
+      await drnPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
+      const drawingURL = this.VIEW_PRINT_PAGE.replace("{{inhouseDc}}", inhouseDc);
+      await drnPage.goto(drawingURL);
       const checkBoxes = await drnPage.$$('#main input[type=checkbox]');
       for (const checkbox of checkBoxes) {
         await checkbox.click();
@@ -125,18 +117,26 @@ export default class GnetHelper extends Web {
         form.mode.value = 'view';
         form.submit();
       });
-      await drnPage.waitForTimeout(5000);
+      await drnPage.waitForTimeout(checkBoxes.length * 2500);
 
-      const popupPage = await super.browser.newPage();
+      const popupPage = await this.browser.newPage();
+      await popupPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       await popupPage.goto(this.VIEW_FORMAT_POPUP);
-      await popupPage.waitForTimeout(5000);
-      const downloadRes = await axios.get(this.DRAWING_DOWLOAD_URL, this.downloadFileOptions);
+      await popupPage.waitForTimeout(checkBoxes.length * 2500);
 
+      const downloadURL = this.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);
+      const downloadRes = await axios.get(downloadURL, this.downloadFileOptions);
       const inhouseDcFolder = path.resolve(todayTempDirectory, inhouseDc);
-      drawing.dir = inhouseDcFolder;
-      const drawingFilePath = path.resolve(`${inhouseDcFolder}/drawing.pdf`);
       upsertDirectory(inhouseDcFolder);
-      fs.writeFileSync(drawingFilePath, downloadRes.data);
+      const drawingFilePath = path.resolve(inhouseDcFolder, `drawing.pdf`);
+      fse.writeFileSync(drawingFilePath, downloadRes.data);
+      await Promise.all([drnPage.close(), popupPage.close()]);
+      drawing.dir = inhouseDcFolder;
+      drawing.fullFilePath = drawingFilePath;
+      drawing.fileId = fileId;
+      drawing.fileName = `drawing.pdf`;
+      drawing.buffer = downloadRes.data;
+      console.log(downloadRes.data);
 
       await Promise.all([drnPage.close(), popupPage.close()]);
 
@@ -154,36 +154,61 @@ export default class GnetHelper extends Web {
 
   async downloadDrnFile(inhouseDc, fullFilePath) {
     try {
-      const drnUrl = `http://cad-sv01:7001/gnets/viewdrn.do?inhouseDc=${inhouseDc}`;
+      const drnUrl = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
 
       const drnFile = await axios.get(drnUrl, this.downloadFileOptions);
-      fs.writeFileSync(`${fullFilePath}/drn.pdf`, drnFile.data);
-      return `${fullFilePath}/drn.pdf`;
+      fse.writeFileSync(path.resolve(fullFilePath, `drn.pdf`), drnFile.data);
+      return path.resolve(fullFilePath, `drn.pdf`);
     } catch (error) {
       autoBotDebugger(`Can not download drnFile: ${error}`);
     }
   }
 
+  // async getPreviousDrn(drawing) {
+  //   try {
+  //     const { prevDrawing, dir, inhouseDc } = drawing;
+  //     const prevInhouseDc = !prevDrawing ? getPreviousInhouseDc(inhouseDc) : getPreviousInhouseDc(prevDrawing.inhouseDc);
+  //     const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", prevInhouseDc);
+  //     const prevDrawingBuffer = await axios.get(drnURL, this.downloadFileOptions);
+  //     fse.writeFileSync(path.resolve(dir, `prevDrn.pdf`), prevDrawingBuffer.data);
+
+  //     return {
+  //       filePath: path.resolve(dir, `prevDrn.pdf`),
+  //       buffer: prevDrawingBuffer.data,
+  //       inhouseDc: prevInhouseDc,
+  //     };
+  //   } catch (err) {
+  //     autoBotDebugger(err);
+  //   }
+  // }
+
   async getPreviousDrn(drawing) {
     try {
-      const { prevDrawing, dir, inhouseDc } = drawing;
-      let prevInhouseDc;
-      if (!prevDrawing) {
-        prevInhouseDc = getPreviousInhouseDc(inhouseDc);
-      } else {
-        prevInhouseDc = getPreviousInhouseDc(prevDrawing.inhouseDc);
-      }
+      const { keyNo, dir } = drawing;
+      const { KEY_NO_INPUT, SEARCH_BUTTON, FIRST_ROW } = RELEASED_PAGE_SELECTOR;
 
-      const prevDrawingBuffer = await axios.get(`http://cad-sv01:7001/gnets/viewdrn.do?inhouseDc=${prevInhouseDc}`, this.downloadFileOptions);
-      fs.writeFileSync(path.resolve(dir, `prevDrn.pdf`), prevDrawingBuffer.data);
+      const releasedPage = await this.browser.newPage();
+      await releasedPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
+      await releasedPage.goto(this.RELEASED_PAGE);
 
+      await releasedPage.type(KEY_NO_INPUT, keyNo);
+      await releasedPage.click(SEARCH_BUTTON);
+      await releasedPage.waitForTimeout(5000);
+
+      const firstRow = await releasedPage.$(FIRST_ROW)
+      const inhouseDcCell = await firstRow.$("td: nth-child(2)");
+      const inhouseDcValue = await (await inhouseDcCell.getProperty('textContent')).jsonValue()
+      const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDcValue);
+      const drnBuffer = await axios.get(drnURL, this.downloadFileOptions);
+      fse.writeFileSync(path.resolve(dir, `prevDrn.pdf`), drnBuffer.data);
+      await releasedPage.close();
       return {
         filePath: path.resolve(dir, `prevDrn.pdf`),
-        buffer: prevDrawingBuffer.data,
-        inhouseDc: prevInhouseDc,
+        buffer: drnBuffer.data,
+        inhouseDc: inhouseDcValue,
       };
-    } catch (err) {
-      autoBotDebugger(err);
+    } catch (error) {
+      autoBotDebugger(error);
     }
   }
 }

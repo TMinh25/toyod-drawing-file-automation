@@ -188,7 +188,7 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
   await tmpImg.crop(TABLE_LEFT, TABLE_TOP, TABLE_WIDTH, TABLE_HEIGHT);
 
   // [!] after cropping, meta data is same??
-  await tmpImg.writeToFile('./debug/testRegion.jpg');
+  // await tmpImg.writeToFile('./debug/testRegion.jpg');
 
   tmpImg.greyscale().threshold();
 

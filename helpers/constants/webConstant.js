@@ -2,6 +2,7 @@ export const OPTIMIZED_WEB_VIEWPORT = {
   width: 1920,
   height: 1080,
   deviceScaleFactor: 1,
+  isMobile: false,
 };
 
 export const OPTIMIZED_GOTO_OPTIONS = {

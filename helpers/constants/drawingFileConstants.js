@@ -55,4 +55,9 @@ export const CSS_SELECTOR = {
     P_NO_NUMBER: '',
     SITE_CELLS: '',
   },
+
+  RELEASED_PAGE_SELECTOR: {
+    KEY_NO_INPUT: '#main input[name=newkeyNoS]',
+    SEARCH_BUTTON: '#searchbox > table > tbody > tr > td:nth-child(1) > table > tbody > tr:nth-child(2) > td > table > tbody > tr:nth-child(3) > td:nth-child(10) > a',
+  }
 };

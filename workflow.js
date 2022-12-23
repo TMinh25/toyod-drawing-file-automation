@@ -30,36 +30,36 @@ const testDrawings = [
   {
     fileId: 1,
     fileName: 'test1.pdf',
-    fullFilePath: './samples/pdf/test.pdf',
+    fullFilePath: '~/drawing-file-automation/samples/pdf/test.pdf',
   },
   {
     fileId: 2,
     fileName: 'test2.pdf',
-    fullFilePath: './samples/pdf/test2.pdf',
+    fullFilePath: '~/drawing-file-automation/samples/pdf/test2.pdf',
   },
   {
     fileId: 3,
     partNo: 'A34232',
     fileName: 'test3.pdf',
-    fullFilePath: './samples/pdf/test3.pdf',
+    fullFilePath: '~/drawing-file-automation/samples/pdf/test3.pdf',
   },
   {
     fileId: 4,
     partNo: 'A34232',
     fileName: 'test4.pdf',
-    fullFilePath: './samples/pdf/test4.pdf',
+    fullFilePath: '~/drawing-file-automation/samples/pdf/test4.pdf',
   },
   {
     fileId: 5,
     partNo: 'A34232',
     fileName: 'test5.pdf',
-    fullFilePath: './samples/pdf/test5.pdf',
+    fullFilePath: '~/drawing-file-automation/samples/pdf/test5.pdf',
   },
   {
     fileId: 6,
     partNo: 'A34232',
     fileName: 'test6.pdf',
-    fullFilePath: './samples/pdf/test6.pdf',
+    fullFilePath: '~/drawing-file-automation/samples/pdf/test6.pdf',
   },
 ]
 
@@ -139,20 +139,21 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       throw new Error("Can't open browser!");
     }
 
-    await gnets.login();
-    const todayExcelFile = await gnets.getTodayExcel(todayTempDirectory);
+    // await gnets.login();
+    // const todayExcelFile = await gnets.getTodayExcel(todayTempDirectory);
 
-    const { drawing: drawingList, mergeRows } = getTodayExcelData(`${todayTempDirectory}/${todayExcelFile}`);
+    // const { drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile));
 
-    skippedDrawings = uniqBy(drawingList, 'inhouseDc');
-    // skippedDrawings = testDrawings;
+    // skippedDrawings = uniqBy(drawingList, 'inhouseDc');
+    skippedDrawings = testDrawings;
 
     // PROCESSING FILES
     do {
       loopCount++;
-      let tempSkippedDrawings = skippedDrawings;
+      let tempSkippedDrawings = Array.from(skippedDrawings);
       skippedDrawings = [];
-      for (let [fileId, drawing] of tempSkippedDrawings) {
+      console.log(loopCount)
+      for (let [fileId, drawing] of tempSkippedDrawings.entries()) {
         try {
           const { inhouseDc } = drawing;
           let checkResult;
@@ -160,13 +161,14 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
           if (!drawing.fullFilePath) {
             const downloadDrawingResult = await gnets.downloadDrawingFile(drawing, todayTempDirectory, fileId)
-            drawing = { ...drawing, ...downloadDrawingResult };
+            drawing = { ...drawing, ...downloadDrawingResult, relativeFilePath: "." + drawing.fullFilePath.substr(drawing.fullFilePath.indexOf("/cache")) };
           }
 
           if (loopCount === 1) { // Tải file drn trước để check bản drn của bản vẽ
             // const fullFilePath = await gnets.downloadDrnFile(inhouseDir);
             const { fullFilePath } = drawing;
-            checkResult = await checkFactoryDrawingByFile(fullFilePath);
+            const filePath = "." + fullFilePath.substr(fullFilePath.indexOf("/cache"))
+            checkResult = await checkFactoryDrawingByFile(filePath);
           } else if (loopCount < MAX_HISTORY_CHECK_FILES) { // Tải bản vẽ trước đó của bản vẽ
             const prevDrawing = await gnets.getPreviousDrn(drawing);
             drawing.prevDrawing = prevDrawing;
