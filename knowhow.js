@@ -12,36 +12,50 @@ import SMTP from './helpers/smtpHelper';
 
 const appBizDebugger = debug('app:biz');
 
-export const stringEqual = (s1, s2) => String(s1).toLowerCase().trim() === String(s2).toLowerCase().trim();
+export const normalizeString = (s) => {
+  return String(s).replace(/\&nbsp;/g, " ").replace(/\&lt;|\&gt;/g, " ").replace(/\s{1,}|\t{1,}/, " ");
+}
 
-export const mountExternalFolder = async (mountFolderPath, mountedLocation, mountUsername, mountPassword) => {
-  try {
-    let mountGrepResponse = execSync(`mount | grep ${mountFolderPath}`).toString("utf-8");
+export const getHighestSubCode = (partNoWithSub, partNoList = []) => {
+  const subNoRegex = /-\d{2,}/
 
-    const mountedPath = mountGrepResponse.split('type')[0].split('on')[1].trim();
-    appBizDebugger(`Target folder is mounted at: ${mountedPath}`);
+  if (!partNoWithSub) {
+    return undefined;
+  }
 
-    if (mountedPath.length > 0) {
-      appBizDebugger("Drive mounted!");
-      return true;
-    }
+  if (!partNoWithSub.match(subNoRegex)) {
+    return partNoWithSub;
+  }
 
-    if (mountedPath.length === 0) {
-      try {
-        appBizDebugger("Drive isn't mounted, trying to mount it...");
+  const subNo = Number(partNoWithSub.slice(-2));
+  const partNo = partNoWithSub.slice(0, 6);
+  let highestSub = 0;
 
-        execSync(`sudo mount -t cifs -o username=${mountUsername},password=${mountPassword} ${mountFolderPath}`);
-      } catch (error) {
-        appBizDebugger("Host unavailable, trying again in 5 seconds...");
-        await sleep(5000) //stop the excution for the given seconds;
-        return false;
+  Array.from(partNoList).forEach((no) => {
+    const part = no.slice(0, 6);
+    if (part.toLowerCase() == partNo.toLowerCase() && no.match(subNoRegex)) {
+      const sub = Number(no.slice(-2));
+
+      if (sub > highestSub && sub <= subNo) {
+        highestSub = sub;
       }
     }
-  } catch (error) {
-    appBizDebugger("Failed to mount drive: " + error);
-    return false;
+  });
+
+  const highestCode = partNo + `-${('00' + highestSub).slice(-2)}`;
+  return { partNo, subNo, highestCode, highestSub };
+}
+
+export const getTrueAKeyNo = (aKeyNo) => {
+  const subKeyNoRegex = /\w{1}\d{1}$/
+  if (!String(aKeyNo).match(subKeyNoRegex)) {
+    return String(aKeyNo);
+  } else {
+    return String(aKeyNo).slice(0, aKeyNo.length - 2);
   }
 }
+
+export const stringEqual = (s1, s2) => String(s1).toLowerCase().trim() === String(s2).toLowerCase().trim();
 
 export const startOfDay = (date) => new Date(new Date(date).setHours(0, 0, 0, 0))
 
@@ -62,12 +76,16 @@ export function removeFolder(folderPath, options) {
 }
 
 export async function upsertDirectory(folderPath) {
-  if (!fse.existsSync(folderPath)) {
-    await fse.ensureDir(folderPath);
-    fse.chmodSync(folderPath, '777');
-  } else {
-    fse.rmSync(folderPath, { recursive: true, force: true });
-    await fse.ensureDir(folderPath);
+  try {
+    if (!fse.existsSync(folderPath)) {
+      await fse.ensureDir(folderPath);
+      fse.chmodSync(folderPath, '777');
+    } else {
+      fse.rmSync(folderPath, { recursive: true, force: true });
+      await fse.ensureDir(folderPath);
+    }
+  } catch (err) {
+    console.error(err);
   }
 }
 
@@ -84,7 +102,6 @@ export function getTodayExcelData(excelFilePath) {
     const excelData = utils.sheet_to_json(worksheet);
 
     const drawing = [];
-
     for (const row of excelData) {
       drawing.push({
         received: row[headers[0]],
@@ -104,8 +121,8 @@ export function getTodayExcelData(excelFilePath) {
         newKeyNo: row[headers[13]],
         add: row[headers[14]],
         discon: row[headers[15]],
-        'CD/C': row[headers[16]],
-        'ID/C': row[headers[17]],
+        'CD/C': Boolean(row[headers[16]]),
+        'ID/C': Boolean(row[headers[17]]),
         partName: row[headers[18]],
         size: row[headers[19]],
         cause: row[headers[20]],
@@ -118,67 +135,75 @@ export function getTodayExcelData(excelFilePath) {
     for (let i = 0; i < mergeStartRowIndex.length; i++) {
       mergeRows.push({ start: mergeStartRowIndex[i] + 1, end: mergeEndRowIndex[i] + 1 });
     }
+    fse.removeSync(excelFilePath)
     return { drawing, mergeRows };
   } catch (error) {
     appBizDebugger({ error });
   }
 }
 
-export async function getTodayExcelWithSite(data, mergeRows) {
-  const excel = new Excel();
-  await excel.readFile('./templates/check-day.xlsx');
-  const workbook = await excel.getWorkbookInstant();
-  const worksheet = workbook.getWorksheet(1);
-  let rowIndex = 2;
-  for (const row of Array.from(data).reverse()) {
-    // TODO: change site cell color for more vibrant cell
-    // can change cell color after insertRow
-    // if (row.factory === 'VT') {
-    //   worksheet.getCell(`V${rowIndex}`).fill = {
-    //     fgColor: { argb: 'F0F0F0F0' },
-    //   };
-    // }
-    worksheet.insertRow(
-      3,
-      [
-        row.received,
-        row.inhouseDc,
-        row.customerDc,
-        row.aKeyNo,
-        row.partNo,
-        row.dwgNo,
-        row.name,
-        row.dwgDiv,
-        row.issue,
-        row.dept,
-        row.release,
-        row.dwgType,
-        row.oldKeyNo,
-        row.newKeyNo,
-        row.add,
-        row.discon,
-        row['CD/C'],
-        row['ID/C'],
-        row.partName,
-        row.size,
-        row.cause,
-        row.site,
-      ],
-      'i+'
-    );
-    rowIndex++;
-  }
-  worksheet.spliceRows(2, 1);
+export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
+  try {
+    const excel = new Excel();
+    await excel.readFile('./templates/check-day.xlsx');
+    const workbook = await excel.getWorkbookInstant();
+    const worksheet = workbook.getWorksheet(1);
+    let rowIndex = 2;
+    for (const row of Array.from(drawingList).reverse()) {
+      // TODO: change site cell color for more vibrant cell
+      // can change cell color after insertRow
+      // if (row.factory === 'VT') {
+      //   worksheet.getCell(`V${rowIndex}`).fill = {
+      //     fgColor: { argb: 'F0F0F0F0' },
+      //   };
+      // }
 
-  mergeRows.forEach((row) => {
-    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'V'].forEach((col) => {
-      worksheet.mergeCells(`${col}${row.start}:${col}${row.end}`);
+      const site = data.find(a => a.inhouseDc === row.inhouseDc);
+      worksheet.insertRow(
+        3,
+        [
+          row.received,
+          row.inhouseDc,
+          row.customerDc,
+          row.aKeyNo,
+          row.partNo,
+          row.dwgNo,
+          row.name,
+          row.dwgDiv,
+          row.issue,
+          row.dept,
+          row.release,
+          row.dwgType,
+          row.oldKeyNo,
+          row.newKeyNo,
+          row.add,
+          row.discon,
+          row['CD/C'],
+          row['ID/C'],
+          row.partName,
+          row.size,
+          row.cause,
+          site ? Array.from(site.factory).join(", ") : '',
+        ],
+        'i+'
+      );
+      rowIndex++;
+    }
+    worksheet.spliceRows(2, 1);
+
+    mergeRows.forEach((row) => {
+      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'V'].forEach((col) => {
+        worksheet.mergeCells(`${col}${row.start}:${col}${row.end}`);
+      });
     });
-  });
 
-  const buffer = await excel.writeBuffer();
-  await excel.writeFile(`./cache/temp/debug/test.xlsx`); // DEBUG
-  return buffer;
+    const buffer = await excel.writeBuffer();
+    await upsertDirectory(`./cache/debug/`);
+    await excel.writeFile(`./cache/debug/test.xlsx`); // DEBUG
+    return buffer;
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 var getDaysInMonth = function (month, year) {
@@ -201,7 +226,7 @@ export async function getCheckDrawingExcel(result, performer, poChecker) {
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
 
-  const checkExcel = result.map((data) => ({
+  const checkExcel = Array.from(result).map((data) => ({
     ...data,
     performer: performer,
     checker: poChecker,

@@ -36,6 +36,7 @@ export const TABLE_REGION = {
 export const BLOCK_PADDING = 15;
 export const FACTORY_BLOCK_PADDING = 7;
 export const DEBUG_FOLDER = './debug';
+export const newDwgDivValue = '設'; // SHIN = NEW
 
 export const CSS_SELECTOR = {
   LOGIN_SCREEN: {
@@ -52,12 +53,10 @@ export const CSS_SELECTOR = {
     TABLE_ROWS: '#main > table.resTab > tbody > tr:not(:first-child)',
     PART_NO_INPUT: '#main input[name=partNo]',
     SEARCH_BUTTON: '#main input[name=search]',
-    P_NO_NUMBER: '',
-    SITE_CELLS: '',
+    TOTAL_RECORD_ELE: '#main > .band1',
   },
 
   RELEASED_PAGE_SELECTOR: {
-    KEY_NO_INPUT: '#main input[name=newkeyNoS]',
-    SEARCH_BUTTON: '#searchbox > table > tbody > tr > td:nth-child(1) > table > tbody > tr:nth-child(2) > td > table > tbody > tr:nth-child(3) > td:nth-child(10) > a',
+    TABLE_ROWS: `tbody#tbd1 > tr[id*='row_']`,
   }
 };

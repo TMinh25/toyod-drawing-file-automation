@@ -7,10 +7,11 @@ import { MAX_HISTORY_CHECK_FILES } from './helpers/constants/drawingFileConstant
 import { checkFactoryDrawingByFile, checkFactoryDrawingOnTings } from './helpers/drawingFileHelper';
 import GnetHelper from './helpers/gnetsHelper';
 import { getCheckDrawingExcel, getTodayExcelData, getTodayExcelWithSite, removeFolder, sendMail, upsertDirectory } from './knowhow';
+import PDFHelper from './helpers/pdfHelper';
 
-const autoBotDebugger = debug('app:bot');
+const autoBotDebugger = debug('app:biz');
 
-const SMTP_SECRET_CODE = 'noreplySMTP';
+const SMTP_SECRET_CODE = 'noreplySmtp';
 const NOTIFICATION_SECRET_CODE = 'drawing_file_notification';
 const PO_CHECKER_SECRET_CODE = 'po_checker';
 const PERFORMER_SECRET_CODE = 'po_performer';
@@ -63,14 +64,15 @@ const testDrawings = [
   },
 ]
 
-// const now = new Date('2022/12/31');
-const now = new Date();
-const nowUserDateFormatted = format(now, 'DD/MM/YYYY');
-const nowUserTimeFormatted = format(now, 'HH:MM');
-const tempDir = `./cache/temp/${format(now, 'YYYYMMDD')}`;
-
 export default async (payload, secretList, autobotCode, autobotSecret) => {
-  console.log(secretList)
+
+  // const now = new Date('2022/12/31');
+  const now = new Date();
+  const nowUserDateFormatted = format(now, 'DD/MM/YYYY');
+  const nowUserTimeFormatted = format(now, 'HH:MM');
+  const tempDir = `./cache/temp/${format(now, 'YYYYMMDD')}`;
+  const drawingsDir = `./cache/QLBV/${format(now, 'DD-MM-YYYY')}`;
+
   try {
     autoBotDebugger('===========================');
     autoBotDebugger('Bot tải bản vẽ');
@@ -96,6 +98,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     const lastDayOfMonth = new Date(year, month, 0);
 
     const todayTempDirectory = path.resolve(tempDir);
+    const todayDrawingDirectory = path.resolve(drawingsDir);
     upsertDirectory(todayTempDirectory);
 
     if (now.getDate() === new Date(lastDayOfMonth).getDate()) {
@@ -139,36 +142,50 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       throw new Error("Can't open browser!");
     }
 
-    // await gnets.login();
-    // const todayExcelFile = await gnets.getTodayExcel(todayTempDirectory);
+    await gnets.login();
+    const todayExcelFile = await gnets.getTodayExcel(todayTempDirectory);
 
-    // const { drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile));
+    if (!todayExcelFile) {
+      autoBotDebugger("No unreceived drawings found!")
+      return { data: {} };
+    }
+    let drawingList, mergeRows;
+    if (todayExcelFile) {
+      ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
+    }
 
-    // skippedDrawings = uniqBy(drawingList, 'inhouseDc');
-    skippedDrawings = testDrawings;
+    // const prevDrawing = await gnets.getPreviousDrn({
+    //   received: false,
+    //   isReceived: false,
+    //   inhouseDc: 'MP22-00036-008',
+    //   customerDc: undefined,
+    //   aKeyNo: '2SW14230B5',
+    //   partNo: 'A34784-15',
+    //   dwgNo: '35020-GGZ-J020-M1',
+    //   name: 'SW ASSY, DIM/HORN/WINKER',
+    //   dwgDiv: '設',
+    //   issue: '金谷 陽斗',
+    // }, path.resolve(todayTempDirectory, 'MP22-00036-008'));
+
+    // console.log(prevDrawing);
+    // const checkResult = await checkFactoryDrawingByFile(prevDrawing.filePath);
+    // console.log({ checkResult });
 
     // PROCESSING FILES
     do {
       loopCount++;
       let tempSkippedDrawings = Array.from(skippedDrawings);
       skippedDrawings = [];
-      console.log(loopCount)
       for (let [fileId, drawing] of tempSkippedDrawings.entries()) {
         try {
+          console.log(drawing);
           const { inhouseDc } = drawing;
           let checkResult;
           const inhouseDir = path.resolve(todayTempDirectory, inhouseDc);
 
-          if (!drawing.fullFilePath) {
-            const downloadDrawingResult = await gnets.downloadDrawingFile(drawing, todayTempDirectory, fileId)
-            drawing = { ...drawing, ...downloadDrawingResult, relativeFilePath: "." + drawing.fullFilePath.substr(drawing.fullFilePath.indexOf("/cache")) };
-          }
-
           if (loopCount === 1) { // Tải file drn trước để check bản drn của bản vẽ
-            // const fullFilePath = await gnets.downloadDrnFile(inhouseDir);
-            const { fullFilePath } = drawing;
-            const filePath = "." + fullFilePath.substr(fullFilePath.indexOf("/cache"))
-            checkResult = await checkFactoryDrawingByFile(filePath);
+            const drnFilePath = gnets.downloadDrnFile(inhouseDc, inhouseDir);
+            checkResult = await checkFactoryDrawingByFile(drnFilePath);
           } else if (loopCount < MAX_HISTORY_CHECK_FILES) { // Tải bản vẽ trước đó của bản vẽ
             const prevDrawing = await gnets.getPreviousDrn(drawing);
             drawing.prevDrawing = prevDrawing;
@@ -182,12 +199,13 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
             skippedDrawings.push({ ...drawing, received: Boolean(drawing.received) });
             continue;
           }
+          console.log({ checkResult })
 
           const { factory } = checkResult;
 
           if (factory) {
             const result = { ...drawing, received: Boolean(drawing.received), ...checkResult };
-            if (factory === 'VT') {
+            if (factory.length === 1 && factory[0].toLowerCase() === 'vntec') {
               VTDrawingList.push(result);
             }
             processedDrawings.push(result);
@@ -202,7 +220,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     autoBotDebugger({ processedDrawings, skippedDrawings });
 
     if (processedDrawings.length > 0) {
-      const todayExcelBuffer = await getTodayExcelWithSite(processedDrawings, mergeRows);
+      const todayExcelBuffer = await getTodayExcelWithSite(processedDrawings, drawingList, mergeRows);
 
       autoBotDebugger(`Sending current's drawing to user's email...`);
 
@@ -222,13 +240,15 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     }
     if (skippedDrawings.length > 0) {
       await sendMail(SMTPConfig, mailTo, {
-        mainSubject: `Tổng hợp bản vẽ không thể tìm nơi lắp ráp của ngày ${nowUserDateFormatted}`,
+        attacgments: [],
+        mailSubject: `Tổng hợp bản vẽ không thể tìm nơi lắp ráp của ngày ${nowUserDateFormatted}`,
         mailBody: `Hệ thống autobot xin gửi lại danh sách bản vẽ không thể xử lý của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}\n
           - Danh sách gồm: 
-          ${skippedDrawings.map(d => `<li>${d.inhouseDc} (${d.partNo})</li>`)}`,
-        attachments: []
+          ${skippedDrawings.map(d => `<li>${d.inhouseDc} (${d.partNo})</li>`)}`
       })
     }
+
+    await Promise.all(VTDrawingList.map(drawing => gnets.downloadDrawingFile(drawing, todayDrawingDirectory)))
 
     for (const drawing of [...processedDrawings, ...skippedDrawings]) {
       await api.apiPost({
@@ -241,8 +261,9 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         },
       });
     }
+    await gnets.closeBrowser();
 
-    removeFolder(todayTempDirectory, { force: true });
+    //removeFolder(todayTempDirectory, { force: true });
     return { data: {} };
   } catch (error) {
     autoBotDebugger('error: ', error);

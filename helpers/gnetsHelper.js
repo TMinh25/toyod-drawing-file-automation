@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { format } from 'date-and-time';
 import debug from 'debug';
 import fse from 'fs-extra';
 import path from 'path';
-import { getFilesInFolder, upsertDirectory } from '../knowhow';
-import { CSS_SELECTOR } from './constants/drawingFileConstants';
+import { getFilesInFolder, getTrueAKeyNo, upsertDirectory } from '../knowhow';
+import { CSS_SELECTOR, newDwgDivValue } from './constants/drawingFileConstants';
 import { OPTIMIZED_WEB_VIEWPORT } from './constants/webConstant';
 import { getPreviousInhouseDc } from './drawingFileHelper';
 import Web from './webHelper';
@@ -11,7 +12,7 @@ import Web from './webHelper';
 export const AVERAGE_LOGIN_DURATION = 0;
 export const AVERAGE_DOWNLOAD_DURATION = 500;
 
-const { LOGIN_SCREEN, RELEASED_PAGE_SELECTOR } = CSS_SELECTOR;
+const { LOGIN_SCREEN, NORECEIVED_PAGE, RELEASED_PAGE_SELECTOR } = CSS_SELECTOR;
 
 const autoBotDebugger = debug('app:bot');
 
@@ -27,13 +28,13 @@ export default class GnetHelper extends Web {
     this.downloadFileOptions = {
       responseType: 'arraybuffer',
       headers: {
-        Accept: 'image/jpeg, application/x-ms-application, image/gif, application/xaml+xml, image/pjpeg, application/x-ms-xbap, */*',
+        Accept: `image/jpeg, application/x-ms-application, image/gif, application/xaml+xml, image/pjpeg, application/x-ms-xbap, */*`,
+        Cookie: '',
+        Connection: 'Keep-Alive',
         'Accept-Encoding': 'gzip, deflate',
         'Accept-Language': 'en-US',
         'User-Agent': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.3; WOW64; Trident/7.0; .NET4.0E; .NET4.0C; Tablet PC 2.0)',
-        Cookie: '',
         'Content-Type': 'application/x-www-form-urlencoded',
-        Connection: 'Keep-Alive',
         'Cache-Control': 'no-cache',
       },
     };
@@ -47,7 +48,7 @@ export default class GnetHelper extends Web {
     const nowUTCString = new Date().toUTCString();
     this.downloadFileOptions.headers.Cookie = `JSESSIONID=${this.sessionId}`;
     this.VIEW_PRINT_PAGE = `${this.gnetsUrl}/viewprint.do?inhouseDc={{inhouseDc}}&sessionId=${this.sessionId}`;
-    this.RELEASED_PAGE = `${this.gnetsUrl}/released.do?sessionId=${this.sessionId}`
+    this.RELEASED_PAGE = `${this.gnetsUrl}/distributionstatuslist.do?sessionId=${this.sessionId}`
     this.NO_RECEIVED_PAGE = `${this.gnetsUrl}/noreceivelist.do?sessionId=${this.sessionId}`;
     this.VIEW_FORMAT_POPUP = `${this.gnetsUrl}/viewformatselect.do?sessionId=${this.sessionId}`;
     this.DRAWING_DOWNLOAD_URL = `${this.gnetsUrl}/viewprint.do?inhouseDc={{inhouseDc}}&mode=PDF&date=${nowUTCString}&sessionId=${this.sessionId}`;
@@ -64,16 +65,16 @@ export default class GnetHelper extends Web {
 
     await this.gotoUrl(this.LOGIN_PAGE);
     await this.type(USER_NAME, this.username);
+
     await this.type(PASSWORD, this.password);
 
     await this.click(LOGIN_BUTTON);
     await this.waitForTimeout(5000);
 
-    const pages = this.browser.pages();
+    const pages = await this.browser.pages();
     const popup = pages[pages.length - 1];
-    const url = popup.url();
 
-    this.getSessionId(url);
+    this.getSessionId(popup.url());
   }
 
   async getTodayExcel(todayTempDirectory) {
@@ -85,7 +86,7 @@ export default class GnetHelper extends Web {
     await page.setViewport(OPTIMIZED_WEB_VIEWPORT);
     await page.goto(this.NO_RECEIVED_PAGE);
     await page._client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: todayTempDirectory });
-    const excelDownloadButton = await page.$(CSS_SELECTOR.NORECEIVED_PAGE.DOWNLOAD_EXCEL);
+    const excelDownloadButton = await page.$(NORECEIVED_PAGE.DOWNLOAD_EXCEL);
     page.once('dialog', async (dialog) => {
       await dialog.accept();
     });
@@ -98,12 +99,12 @@ export default class GnetHelper extends Web {
     return todayExcelFile;
   }
 
-  async downloadDrawingFile(drawing, todayTempDirectory, fileId) {
+  async downloadDrawingFile(drawing, todayDrawingDirectory) {
     try {
       if (!this.isBrowserOpened()) {
         this.login();
       }
-      const { inhouseDc } = drawing;
+      const { inhouseDc, partNo } = drawing;
 
       const drnPage = await this.browser.newPage();
       await drnPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
@@ -120,34 +121,30 @@ export default class GnetHelper extends Web {
       await drnPage.waitForTimeout(checkBoxes.length * 2500);
 
       const popupPage = await this.browser.newPage();
+
       await popupPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       await popupPage.goto(this.VIEW_FORMAT_POPUP);
+      await tingsPage.waitForNavigation({ waitUntil: 'networkidle2' });
       await popupPage.waitForTimeout(checkBoxes.length * 2500);
 
       const downloadURL = this.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);
       const downloadRes = await axios.get(downloadURL, this.downloadFileOptions);
-      const inhouseDcFolder = path.resolve(todayTempDirectory, inhouseDc);
-      upsertDirectory(inhouseDcFolder);
-      const drawingFilePath = path.resolve(inhouseDcFolder, `drawing.pdf`);
+      drawing.dir = todayDrawingDirectory;
+      const drawingFilePath = path.resolve(todayDrawingDirectory, `${inhouseDc} (${partNo}).pdf`);
       fse.writeFileSync(drawingFilePath, downloadRes.data);
-      await Promise.all([drnPage.close(), popupPage.close()]);
-      drawing.dir = inhouseDcFolder;
       drawing.fullFilePath = drawingFilePath;
-      drawing.fileId = fileId;
-      drawing.fileName = `drawing.pdf`;
+      drawing.fileName = `${inhouseDc} (${partNo}).pdf`;
       drawing.buffer = downloadRes.data;
-      console.log(downloadRes.data);
-
       await Promise.all([drnPage.close(), popupPage.close()]);
 
       return {
-        dir: inhouseDcFolder,
+        dir: todayDrawingDirectory,
         fullFilePath: drawingFilePath,
-        fileName: `drawing.pdf`,
-        fileId,
+        fileName: `${inhouseDc} (${partNo}).pdf`,
         buffer: downloadRes.data,
       };
     } catch (error) {
+      console.error(error);
       autoBotDebugger(error);
     }
   }
@@ -157,58 +154,70 @@ export default class GnetHelper extends Web {
       const drnUrl = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
 
       const drnFile = await axios.get(drnUrl, this.downloadFileOptions);
-      fse.writeFileSync(path.resolve(fullFilePath, `drn.pdf`), drnFile.data);
-      return path.resolve(fullFilePath, `drn.pdf`);
+      drnFilePath = path.resolve(fullFilePath, `drn.pdf`);
+      fse.writeFileSync(drnFilePath, drnFile.data);
+      return drnFilePath;
     } catch (error) {
       autoBotDebugger(`Can not download drnFile: ${error}`);
     }
   }
 
-  // async getPreviousDrn(drawing) {
-  //   try {
-  //     const { prevDrawing, dir, inhouseDc } = drawing;
-  //     const prevInhouseDc = !prevDrawing ? getPreviousInhouseDc(inhouseDc) : getPreviousInhouseDc(prevDrawing.inhouseDc);
-  //     const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", prevInhouseDc);
-  //     const prevDrawingBuffer = await axios.get(drnURL, this.downloadFileOptions);
-  //     fse.writeFileSync(path.resolve(dir, `prevDrn.pdf`), prevDrawingBuffer.data);
-
-  //     return {
-  //       filePath: path.resolve(dir, `prevDrn.pdf`),
-  //       buffer: prevDrawingBuffer.data,
-  //       inhouseDc: prevInhouseDc,
-  //     };
-  //   } catch (err) {
-  //     autoBotDebugger(err);
-  //   }
-  // }
-
-  async getPreviousDrn(drawing) {
+  async getPreviousDrn(drawing, dir) {
     try {
-      const { keyNo, dir } = drawing;
-      const { KEY_NO_INPUT, SEARCH_BUTTON, FIRST_ROW } = RELEASED_PAGE_SELECTOR;
+      const { prevDrawing, inhouseDc, aKeyNo } = drawing;
 
-      const releasedPage = await this.browser.newPage();
+      const releasedPage = await this.browser.newPage()
       await releasedPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       await releasedPage.goto(this.RELEASED_PAGE);
 
-      await releasedPage.type(KEY_NO_INPUT, keyNo);
-      await releasedPage.click(SEARCH_BUTTON);
-      await releasedPage.waitForTimeout(5000);
+      const inputAKeyNo = getTrueAKeyNo(aKeyNo);
+      console.log({ inputAKeyNo })
 
-      const firstRow = await releasedPage.$(FIRST_ROW)
-      const inhouseDcCell = await firstRow.$("td: nth-child(2)");
-      const inhouseDcValue = await (await inhouseDcCell.getProperty('textContent')).jsonValue()
-      const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDcValue);
-      const drnBuffer = await axios.get(drnURL, this.downloadFileOptions);
-      fse.writeFileSync(path.resolve(dir, `prevDrn.pdf`), drnBuffer.data);
+      await releasedPage.$eval('#main', (form, keyNo) => {
+        form.mode.value = "search";
+        form.akeyNoS.value = "%" + keyNo;
+        form.dateFrom.value = "";
+        form.releasedFlg.value = "true";
+        form.submit();
+      }, inputAKeyNo);
+      console.log(3)
+      // await releasedPage.waitForNavigation({ waitUntil: 'load' });
+      await releasedPage.waitForTimeout(2500);
+      const rows = await releasedPage.$$(RELEASED_PAGE_SELECTOR.TABLE_ROWS);
+      console.log(rows.length)
+      let result;
+
+      for (const row of rows) {
+        const id = await (await row.getProperty("id")).jsonValue();
+        console.log(id)
+        if (String(id).match(/^row_\d{1,}/)) {
+          const dwgDivCell = await row.$("td:nth-child(7)");
+          const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
+          console.log(1)
+          if (dwgDiv === newDwgDivValue) {
+            console.log(2)
+            const inhouseDcCell = await row.$("td:nth-child(2)");
+            const inhouseDc = String(await (await inhouseDcCell.getProperty('innerText')).jsonValue()).trim();
+
+            const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
+            const prevDrawingBuffer = await axios.get(drnURL, this.downloadFileOptions);
+            await upsertDirectory(dir);
+            const prevDrnFilePath = path.resolve(dir, `prevDrn.pdf`);
+            fse.writeFileSync(prevDrnFilePath, prevDrawingBuffer.data);
+            result = {
+              filePath: prevDrnFilePath,
+              buffer: prevDrawingBuffer.data,
+              inhouseDc,
+            }
+            break; 
+          }
+        }
+      }
       await releasedPage.close();
-      return {
-        filePath: path.resolve(dir, `prevDrn.pdf`),
-        buffer: drnBuffer.data,
-        inhouseDc: inhouseDcValue,
-      };
-    } catch (error) {
-      autoBotDebugger(error);
+      return result;
+    } catch (err) {
+      console.error(err)
+      autoBotDebugger(err);
     }
   }
 }

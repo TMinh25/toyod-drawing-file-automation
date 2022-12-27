@@ -205,6 +205,12 @@ class Web_Helper {
     }
   }
 
+  async getOncePopUp() {
+    const newPagePromise = new Promise((resolve) => this.browser.once('targetcreated', (target) => resolve(target.page())));
+    const popup = await newPagePromise;
+    return popup;
+  }
+
   async closeBrowser() {
     try {
       await this.browser.close();

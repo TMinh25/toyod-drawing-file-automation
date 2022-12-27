@@ -1,7 +1,8 @@
 import debug from 'debug';
 import { countBy, round } from 'lodash';
 import { OEM, PSM } from 'tesseract.js';
-import { daysBetween, stringEqual } from '../knowhow';
+import { daysBetween, getHighestSubCode, normalizeString, stringEqual } from '../knowhow';
+import path from 'path';
 import {
   ANGLE_CHECKING_STEP,
   ASSEMBLY_ROW_INDEX,
@@ -31,54 +32,85 @@ const autoBotDebugger = debug('app:bot');
 
 const TO_BASE64 = true;
 
-export function getPreviousInhouseDc(inhouseDc) {
-  const codeNumberCount = 3;
-  const codeRegex = /(-\d{3})$/;
+// export function getPreviousInhouseDc(inhouseDc) {
+//   const codeNumberCount = 3;
+//   const codeRegex = /(-\d{3})$/;
 
-  if (String(inhouseDc).match(codeRegex)) {
-    const prevCount = Number(String(inhouseDc).slice(-codeNumberCount)) - 1;
-    const dcNumber = ('0'.repeat(codeNumberCount) + String(prevCount)).slice(-codeNumberCount);
-    const prevInhouseDc = String(inhouseDc).replace(codeRegex, '') + `-${dcNumber}`;
-    return prevInhouseDc;
-  }
-}
+//   if (String(inhouseDc).match(codeRegex)) {
+//     const prevCount = Number(String(inhouseDc).slice(-codeNumberCount)) - 1;
+//     const dcNumber = ('0'.repeat(codeNumberCount) + String(prevCount)).slice(-codeNumberCount);
+//     const prevInhouseDc = String(inhouseDc).replace(codeRegex, '') + `-${dcNumber}`;
+//     return prevInhouseDc;
+//   }
+// }
 
 export async function checkFactoryDrawingOnTings(drawing, webHelper) {
-  const { partNo, releaseDate } = drawing;
+  const { partNo } = drawing;
   if (!partNo) {
     return undefined;
   }
 
   const tingsPage = await webHelper.browser.newPage()
-  await tingsPage.goto(`https://tings.toyo-denso.co.jp/main/itemSearch/form/`);
-  await tingsPage.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partNo);
+  await tingsPage.goto(`https://tings.toyo-denso.co.jp/main/itemSearch/form/`, {
+    timeout: 60000,
+  });
+
+  const subNoRegex = /-\d{2,}$/
+  const partCode = partNo.match(subNoRegex) ? partNo.slice(0, 6) : partNo;
+
+  await tingsPage.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partCode);
   const searchButton = await tingsPage.$(CSS_SELECTOR.TINGS.SEARCH_BUTTON);
   await searchButton.click();
-  await tingsPage.waitForTimeout(10000);
-  const rows = await tingsPage.$$(CSS_SELECTOR.TINGS.TABLE_ROWS);
+  await tingsPage.waitForNavigation({ waitUntil: 'networkidle2' });
 
-  if (rows.length > 0) {
-    let closestDate, site;
+  const totalRecordEle = await tingsPage.$(CSS_SELECTOR.TINGS.TOTAL_RECORD_ELE);
+  let totalRecord = normalizeString(await (await totalRecordEle.getProperty('innerHTML')).jsonValue());
+  totalRecord = totalRecord.slice(totalRecord.indexOf(":") + 1, 17)
+  const totalPage = Math.ceil(totalRecord / 50);
+
+  const partNoList = [], siteList = [];
+  let page = 1;
+
+  do {
+    const rows = await tingsPage.$$(CSS_SELECTOR.TINGS.TABLE_ROWS);
+
     for (const row of rows) {
       const partNoCell = await row.$('td:nth-child(2)');
       const partNoValue = String(await (await partNoCell.getProperty('innerText')).jsonValue());
-      const createDateCell = await row.$('td:nth-child(8)');
-      const createDateValue = String(await (await createDateCell.getProperty('innerText')).jsonValue());
-
-      const daysBetweenCreateDate = daysBetween(createDateValue, releaseDate);
-      if (stringEqual(partNoValue, partNo) && (daysBetweenCreateDate <= closestDate || !closestDate)) {
-        closestDate = daysBetweenCreateDate;
-        const siteCell = await row.$('td:nth-child(10)');
-        const siteValue = String(await (await siteCell.getProperty('innerText')).jsonValue());
-
-        site = String(siteValue.slice(0, 1) + 'T').toUpperCase();
+      const siteCell = await row.$('td:nth-child(10)');
+      const siteValue = String(await (await siteCell.getProperty('innerText')).jsonValue());
+      partNoList.push(partNoValue);
+      siteList.push(siteValue);
+    }
+    if (page < totalPage) {
+      const nextPageButton = await totalRecordEle.$('a:nth-last-child(2)');
+      if (nextPageButton) {
+        await nextPageButton.click();
+        await tingsPage.waitForNavigation({ waitUntil: 'networkidle2' });
       }
     }
+    page++;
+  } while (page === totalPage);
+  await tingsPage.close();
 
-    autoBotDebugger({ site });
-    return { factory: site, checked: true, isVNTec: site === 'VT' };
-  }
-  else {
+  let site;
+
+  if (partNoList.length > 0 && siteList.length > 0) {
+    const highestSubCode = getHighestSubCode(partNo, partNoList);
+    if (highestSubCode) {
+      const { partNo, subNo, highestCode } = highestSubCode;
+      const siteIndexes = []
+      partNoList.forEach((no, i) => {
+        if (no === highestCode) {
+          siteIndexes.push(i);
+        };
+      });
+      site = siteList.filter((v, i) => siteIndexes.includes(i));
+    } else {
+      site = [...new Set(siteList)];
+    }
+    return { factory: site, checked: true, isVNTec: site.length === 1 && site[0].toLowerCase() === "vntec" };
+  } else {
     autoBotDebugger("No tings result found!");
     return undefined;
   }
@@ -87,7 +119,6 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
 export async function checkFactoryDrawingByFile(fullFilePath) {
   const pdf = new PDFHelper();
   await pdf.read(fullFilePath);
-
   let angle = 0;
   let imageMetaData,
     tableRegion = [],
@@ -115,13 +146,11 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
 
     // DEBUG START
 
-    // for (const segmentedRegion of tableRegion) {
-    //   const { rowIndex, cellIndex, left, top, width, height } = segmentedRegion;
-
-    //   let imgSegmentedRegion = await cropRegion(imageBuffer, left, top, width, height, angle);
-
-    //   await imgSegmentedRegion.writeToFile(getDebugFileName(fileName, `r${rowIndex}.c${cellIndex}`, IMAGE_FILE_TYPE.JPG)); // write to file to debug
-    // }
+    //for (const segmentedRegion of tableRegion) {
+    //  const { rowIndex, cellIndex, left, top, width, height } = segmentedRegion;
+    //  let imgSegmentedRegion = await cropRegion(imageBuffer, left, top, width, height, angle);
+    //  await imgSegmentedRegion.writeToFile(`../cache/temp/debug/r${rowIndex}.c${cellIndex}.${IMAGE_FILE_TYPE.JPG}`); // write to file to debug
+    //}
 
     // DEBUG END
 
@@ -148,18 +177,23 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
     assemblyCheckedList[i] = assemblyChecked;
   }
 
-  const shippingCheckedCount = countBy(shippingCheckedList, (i) => i == true).true;
+  // const shippingCheckedCount = countBy(shippingCheckedList, (i) => i == true).true;
   const assemblyCheckedCount = countBy(assemblyCheckedList, (i) => i == true).true;
 
   // if (checkedCount === 1 && checkedList[VTIndex])
-  if (shippingCheckedCount > 1) {
-    return undefined;
-  }
+  // if (shippingCheckedCount > 1) {
+  //   return undefined;
+  // }
+
+  console.log({ assemblyCheckedList, factoryCodeList });
 
   if (assemblyCheckedCount === 1) {
     const checkedIndex = assemblyCheckedList.findIndex((checked) => checked === true);
     const factory = factoryCodeList[checkedIndex];
     return { factory, checked: Boolean(checkedIndex >= 0), isVNTec: factory === 'VT' };
+  } else if (assemblyCheckedCount > 1) {
+    const factory = factoryCodeList.filter((f, i) => assemblyCheckedList[i]);
+    return { factory, checked: true, isVNTec: false };
   }
 }
 
@@ -276,8 +310,8 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
         const cellBuffer = await cellImg.writeToBuffer();
         const { text } = await tesseractOcr.recognize(cellBuffer);
         factoryCodeList = String(text)
-          .replace(/\r?\n|\r/, '')
-          .split('|');
+          .replace(/\r?\n|\r|\|/g, '') // replace all unnecessary character
+          .match(/.{2}/g); // split text into array of segments with 2 character
       }
 
       for (x = topX; x < topX + TABLE_WIDTH && cellIndex < MAX_HORIZONTAL_BLOCK_COUNT; x += MAX_LINE_WIDTH) {
