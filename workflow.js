@@ -6,8 +6,7 @@ import { API } from './helpers';
 import { MAX_HISTORY_CHECK_FILES } from './helpers/constants/drawingFileConstants';
 import { checkFactoryDrawingByFile, checkFactoryDrawingOnTings } from './helpers/drawingFileHelper';
 import GnetHelper from './helpers/gnetsHelper';
-import { getCheckDrawingExcel, getTodayExcelData, getTodayExcelWithSite, removeFolder, sendMail, upsertDirectory } from './knowhow';
-import PDFHelper from './helpers/pdfHelper';
+import { getTodayExcelData, getTodayExcelWithSite, sendMail, upsertDirectory } from './knowhow';
 
 const autoBotDebugger = debug('app:biz');
 
@@ -31,36 +30,36 @@ const testDrawings = [
   {
     fileId: 1,
     fileName: 'test1.pdf',
-    fullFilePath: '~/drawing-file-automation/samples/pdf/test.pdf',
+    fullFilePath: './samples/pdf/test.pdf',
   },
   {
     fileId: 2,
     fileName: 'test2.pdf',
-    fullFilePath: '~/drawing-file-automation/samples/pdf/test2.pdf',
+    fullFilePath: './samples/pdf/test2.pdf',
   },
   {
     fileId: 3,
     partNo: 'A34232',
     fileName: 'test3.pdf',
-    fullFilePath: '~/drawing-file-automation/samples/pdf/test3.pdf',
+    fullFilePath: './samples/pdf/test3.pdf',
   },
   {
     fileId: 4,
     partNo: 'A34232',
     fileName: 'test4.pdf',
-    fullFilePath: '~/drawing-file-automation/samples/pdf/test4.pdf',
+    fullFilePath: './samples/pdf/test4.pdf',
   },
   {
     fileId: 5,
     partNo: 'A34232',
     fileName: 'test5.pdf',
-    fullFilePath: '~/drawing-file-automation/samples/pdf/test5.pdf',
+    fullFilePath: './samples/pdf/test5.pdf',
   },
   {
     fileId: 6,
     partNo: 'A34232',
     fileName: 'test6.pdf',
-    fullFilePath: '~/drawing-file-automation/samples/pdf/test6.pdf',
+    fullFilePath: './samples/pdf/test6.pdf',
   },
 ]
 
@@ -69,7 +68,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
   // const now = new Date('2022/12/31');
   const now = new Date();
   const nowUserDateFormatted = format(now, 'DD/MM/YYYY');
-  const nowUserTimeFormatted = format(now, 'HH:MM');
+  const nowUserTimeFormatted = format(now, 'HH:mm');
   const tempDir = `./cache/temp/${format(now, 'YYYYMMDD')}`;
   const drawingsDir = `./cache/QLBV/${format(now, 'DD-MM-YYYY')}`;
 
@@ -101,37 +100,37 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     const todayDrawingDirectory = path.resolve(drawingsDir);
     upsertDirectory(todayTempDirectory);
 
-    if (now.getDate() === new Date(lastDayOfMonth).getDate()) {
-      try {
-        autoBotDebugger('Today is the last day of month => Getting report excel');
+    // if (now.getDate() === new Date(lastDayOfMonth).getDate()) {
+    //   try {
+    //     autoBotDebugger('Today is the last day of month => Getting report excel');
 
-        const data = await api.apiGet({ url: `${REPORT_URL}?month=${month}`, encodedToken });
-        const reportFile = await getCheckDrawingExcel(data.data, performer, poChecker);
-        const reportFileBuffer = await reportFile.writeBuffer();
+    //     const data = await api.apiGet({ url: `${REPORT_URL}?month=${month}`, encodedToken });
+    //     const reportFile = await getCheckDrawingExcel(data.data, performer, poChecker);
+    //     const reportFileBuffer = await reportFile.writeBuffer();
 
-        const attachments = [
-          {
-            filename: `Bảng dữ liệu check bản vẽ trên GNETs - T${month}.xlsx`,
-            content: reportFileBuffer,
-            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          },
-        ];
+    //     const attachments = [
+    //       {
+    //         filename: `Bảng dữ liệu check bản vẽ trên GNETs - T${month}.xlsx`,
+    //         content: reportFileBuffer,
+    //         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    //       },
+    //     ];
 
-        await sendMail(SMTPConfig, mailTo, {
-          mailSubject: `Báo cáo tổng hợp bản vẽ của tháng ${month}/${year}`,
-          mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của tháng ${month}/${year}`,
-          attachments,
-        });
-      } catch (error) {
-        autoBotDebugger(error);
-      }
-    }
+    //     await sendMail(SMTPConfig, mailTo, {
+    //       mailSubject: `Báo cáo tổng hợp bản vẽ của tháng ${month}/${year}`,
+    //       mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của tháng ${month}/${year}`,
+    //       attachments,
+    //     });
+    //   } catch (error) {
+    //     autoBotDebugger(error);
+    //   }
+    // }
 
-    const VTDrawingList = [];
+    const downloadDrawingList = [];
 
-    let processedDrawings = [],
-      skippedDrawings = [],
-      loopCount = 0;
+    let loopCount = 0,
+      processedDrawings = [],
+      skippedDrawings = [];
 
     const { BROWSER_OPTIONS } = botInfo;
 
@@ -154,6 +153,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
     }
 
+    skippedDrawings = uniqBy(Array.from(drawingList)/*.filter(d => !d.isReceived)*/, 'inhouseDc')
+
     // const prevDrawing = await gnets.getPreviousDrn({
     //   received: false,
     //   isReceived: false,
@@ -167,29 +168,31 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     //   issue: '金谷 陽斗',
     // }, path.resolve(todayTempDirectory, 'MP22-00036-008'));
 
-    // console.log(prevDrawing);
     // const checkResult = await checkFactoryDrawingByFile(prevDrawing.filePath);
-    // console.log({ checkResult });
+    // console.log({ checkResult })
 
     // PROCESSING FILES
     do {
       loopCount++;
       let tempSkippedDrawings = Array.from(skippedDrawings);
       skippedDrawings = [];
-      for (let [fileId, drawing] of tempSkippedDrawings.entries()) {
+      for (let drawing of tempSkippedDrawings) {
         try {
-          console.log(drawing);
-          const { inhouseDc } = drawing;
           let checkResult;
+          const { inhouseDc } = drawing;
           const inhouseDir = path.resolve(todayTempDirectory, inhouseDc);
+          await upsertDirectory(inhouseDir);
 
           if (loopCount === 1) { // Tải file drn trước để check bản drn của bản vẽ
-            const drnFilePath = gnets.downloadDrnFile(inhouseDc, inhouseDir);
+            const drnFilePath = await gnets.downloadDrnFile(inhouseDc, inhouseDir);
             checkResult = await checkFactoryDrawingByFile(drnFilePath);
+            drawing = { ...drawing, ...checkResult }
           } else if (loopCount < MAX_HISTORY_CHECK_FILES) { // Tải bản vẽ trước đó của bản vẽ
-            const prevDrawing = await gnets.getPreviousDrn(drawing);
+            const prevDrawing = await gnets.getPreviousDrn(drawing, todayTempDirectory);
             drawing.prevDrawing = prevDrawing;
             checkResult = await checkFactoryDrawingByFile(drawing.prevDrawing.filePath);
+            delete checkResult.drawingRank;
+            delete checkResult.categoryObj;
           } else if (loopCount === MAX_HISTORY_CHECK_FILES) { // Check trên tings
             checkResult = await checkFactoryDrawingOnTings(drawing, gnets);
           }
@@ -199,20 +202,21 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
             skippedDrawings.push({ ...drawing, received: Boolean(drawing.received) });
             continue;
           }
-          console.log({ checkResult })
 
-          const { factory } = checkResult;
+          autoBotDebugger(checkResult)
+
+          const { factory, isVNTec, categoryObj } = checkResult;
 
           if (factory) {
-            const result = { ...drawing, received: Boolean(drawing.received), ...checkResult };
-            if (factory.length === 1 && factory[0].toLowerCase() === 'vntec') {
-              VTDrawingList.push(result);
+            const result = { ...drawing, ...checkResult };
+            if (factory.length === 1 && isVNTec && !categoryObj["S0"]) {
+              downloadDrawingList.push(result);
             }
             processedDrawings.push(result);
           }
         } catch (error) {
-          autoBotDebugger(error);
-          skippedDrawings.push({ ...drawing, received: Boolean(drawing.received) });
+          autoBotDebugger(`resulting error: ${error}`);
+          skippedDrawings.push(drawing);
         }
       }
     } while (!isEmpty(skippedDrawings) && loopCount < MAX_HISTORY_CHECK_FILES);
@@ -226,7 +230,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
       const attachments = [
         {
-          filename: `Bảng dữ liệu check bản vẽ trên GNETs - T${month}.xlsx`,
+          filename: `Bảng dữ liệu check bản vẽ trên GNETs - ngày ${nowUserDateFormatted}.xlsx`,
           content: todayExcelBuffer,
           contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         },
@@ -242,25 +246,31 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       await sendMail(SMTPConfig, mailTo, {
         attacgments: [],
         mailSubject: `Tổng hợp bản vẽ không thể tìm nơi lắp ráp của ngày ${nowUserDateFormatted}`,
-        mailBody: `Hệ thống autobot xin gửi lại danh sách bản vẽ không thể xử lý của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}\n
-          - Danh sách gồm: 
-          ${skippedDrawings.map(d => `<li>${d.inhouseDc} (${d.partNo})</li>`)}`
+        mailBody: `<b>Hệ thống autobot xin gửi lại danh sách bản vẽ không thể xử lý của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}</b>\n
+          Danh sách gồm: 
+          ${skippedDrawings.map(d => `- ${d.inhouseDc} (${d.partNo})<br/>`)}`
       })
     }
 
-    await Promise.all(VTDrawingList.map(drawing => gnets.downloadDrawingFile(drawing, todayDrawingDirectory)))
-
-    for (const drawing of [...processedDrawings, ...skippedDrawings]) {
-      await api.apiPost({
-        url: URL,
-        encodedToken,
-        data: {
-          ...drawing,
-          poChecker,
-          performer,
-        },
-      });
+    await upsertDirectory(todayDrawingDirectory)
+    for (const drawing of downloadDrawingList) {
+      console.log(drawing);
+      await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
     }
+    // await Promise.all(downloadDrawingList.map(drawing => gnets.downloadDrawingFile(drawing, todayDrawingDirectory)))
+
+    const a = await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => api.apiPost({
+      url: URL,
+      encodedToken,
+      data: {
+        ...drawing,
+        poChecker,
+        performer,
+      },
+    })));
+
+    console.log(a);
+
     await gnets.closeBrowser();
 
     //removeFolder(todayTempDirectory, { force: true });

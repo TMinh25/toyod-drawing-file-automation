@@ -110,6 +110,7 @@ export default class GnetHelper extends Web {
       await drnPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       const drawingURL = this.VIEW_PRINT_PAGE.replace("{{inhouseDc}}", inhouseDc);
       await drnPage.goto(drawingURL);
+      await drnPage.waitForNavigation({ waitUntil: 'networkidle2' })
       const checkBoxes = await drnPage.$$('#main input[type=checkbox]');
       for (const checkbox of checkBoxes) {
         await checkbox.click();
@@ -124,7 +125,7 @@ export default class GnetHelper extends Web {
 
       await popupPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       await popupPage.goto(this.VIEW_FORMAT_POPUP);
-      await tingsPage.waitForNavigation({ waitUntil: 'networkidle2' });
+      await popupPage.waitForNavigation({ waitUntil: 'networkidle2' });
       await popupPage.waitForTimeout(checkBoxes.length * 2500);
 
       const downloadURL = this.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);
@@ -154,7 +155,7 @@ export default class GnetHelper extends Web {
       const drnUrl = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
 
       const drnFile = await axios.get(drnUrl, this.downloadFileOptions);
-      drnFilePath = path.resolve(fullFilePath, `drn.pdf`);
+      const drnFilePath = path.resolve(fullFilePath, `drn.pdf`);
       fse.writeFileSync(drnFilePath, drnFile.data);
       return drnFilePath;
     } catch (error) {
@@ -171,7 +172,6 @@ export default class GnetHelper extends Web {
       await releasedPage.goto(this.RELEASED_PAGE);
 
       const inputAKeyNo = getTrueAKeyNo(aKeyNo);
-      console.log({ inputAKeyNo })
 
       await releasedPage.$eval('#main', (form, keyNo) => {
         form.mode.value = "search";
@@ -180,36 +180,31 @@ export default class GnetHelper extends Web {
         form.releasedFlg.value = "true";
         form.submit();
       }, inputAKeyNo);
-      console.log(3)
       // await releasedPage.waitForNavigation({ waitUntil: 'load' });
       await releasedPage.waitForTimeout(2500);
       const rows = await releasedPage.$$(RELEASED_PAGE_SELECTOR.TABLE_ROWS);
-      console.log(rows.length)
       let result;
 
       for (const row of rows) {
         const id = await (await row.getProperty("id")).jsonValue();
-        console.log(id)
         if (String(id).match(/^row_\d{1,}/)) {
           const dwgDivCell = await row.$("td:nth-child(7)");
           const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
-          console.log(1)
           if (dwgDiv === newDwgDivValue) {
-            console.log(2)
             const inhouseDcCell = await row.$("td:nth-child(2)");
             const inhouseDc = String(await (await inhouseDcCell.getProperty('innerText')).jsonValue()).trim();
 
             const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
             const prevDrawingBuffer = await axios.get(drnURL, this.downloadFileOptions);
             await upsertDirectory(dir);
-            const prevDrnFilePath = path.resolve(dir, `prevDrn.pdf`);
+            const prevDrnFilePath = path.resolve(dir, `${inhouseDc} - prevDrn.pdf`);
             fse.writeFileSync(prevDrnFilePath, prevDrawingBuffer.data);
             result = {
               filePath: prevDrnFilePath,
               buffer: prevDrawingBuffer.data,
               inhouseDc,
             }
-            break; 
+            break;
           }
         }
       }

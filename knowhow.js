@@ -3,6 +3,7 @@ import { format } from 'date-and-time';
 import debug from 'debug';
 import fs from 'fs';
 import fse from 'fs-extra';
+import { isArray } from 'lodash';
 import path from 'path';
 import { readFile, utils } from 'xlsx';
 import { Excel } from './helpers';
@@ -121,8 +122,8 @@ export function getTodayExcelData(excelFilePath) {
         newKeyNo: row[headers[13]],
         add: row[headers[14]],
         discon: row[headers[15]],
-        'CD/C': Boolean(row[headers[16]]),
-        'ID/C': Boolean(row[headers[17]]),
+        'CD/C': row[headers[16]],
+        'ID/C': row[headers[17]],
         partName: row[headers[18]],
         size: row[headers[19]],
         cause: row[headers[20]],
@@ -169,10 +170,10 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.partNo,
           row.dwgNo,
           row.name,
-          row.dwgDiv,
+          site.drawingRank ? site.drawingRank : row.dwgDiv,
           row.issue,
           row.dept,
-          row.release,
+          row.releaseDate,
           row.dwgType,
           row.oldKeyNo,
           row.newKeyNo,
@@ -183,7 +184,7 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.partName,
           row.size,
           row.cause,
-          site ? Array.from(site.factory).join(", ") : '',
+          site ? isArray(site.factory) ? site.factory.join(", ") : site.factory : '',
         ],
         'i+'
       );

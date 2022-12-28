@@ -1,13 +1,11 @@
 import debug from 'debug';
 import { countBy, round } from 'lodash';
 import { OEM, PSM } from 'tesseract.js';
-import { daysBetween, getHighestSubCode, normalizeString, stringEqual } from '../knowhow';
-import path from 'path';
+import { getHighestSubCode, normalizeString } from '../knowhow';
 import {
   ANGLE_CHECKING_STEP,
   ASSEMBLY_ROW_INDEX,
-  BLOCK_PADDING,
-  CSS_SELECTOR,
+  BLOCK_PADDING, CATEGORY_REGION_LIST, CSS_SELECTOR,
   FACTORY_CODE_CHAR_WHITELIST,
   FIRST_PAGE,
   IMAGE_DESITY,
@@ -19,9 +17,8 @@ import {
   MIN_BLOCK_HEIGHT,
   MIN_BLOCK_WIDTH,
   MIN_ROTATED_ANGLE,
-  PDF_ZOOM_RATIO,
-  SHIPPING_ROW_INDEX,
-  TABLE_REGION,
+  PDF_ZOOM_RATIO, RANK_REGION_LIST, SHIPPING_ROW_INDEX,
+  SITE_TABLE_REGION,
   WHITE_PIXEL_RATE
 } from './constants/drawingFileConstants';
 import ImageHelper from './imageHelper';
@@ -120,7 +117,8 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
   const pdf = new PDFHelper();
   await pdf.read(fullFilePath);
   let angle = 0;
-  let imageMetaData,
+  let siteMetaData,
+    drawingRank,
     tableRegion = [],
     factoryCodeList = [];
 
@@ -140,9 +138,10 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
   const imageBuffer = Buffer.from(base64Image, 'base64');
 
   for (angle = MIN_ROTATED_ANGLE; angle < MAX_ROTATED_ANGLE; angle += ANGLE_CHECKING_STEP) {
-    imageMetaData = await segmentInfoRegion(imageBuffer, round(angle, 3));
+    siteMetaData = await siteOfDrawingSegmentInfo(imageBuffer, round(angle, 3));
 
-    ({ tableRegion, factoryCodeList } = imageMetaData);
+
+    ({ tableRegion, factoryCodeList } = siteMetaData);
 
     // DEBUG START
 
@@ -167,7 +166,8 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
   const shippingCheckedRegionList = tableRegion.filter((region) => region.rowIndex === SHIPPING_ROW_INDEX && region.cellIndex !== 0);
   const assemblyCheckedRegionList = tableRegion.filter((region) => region.rowIndex === ASSEMBLY_ROW_INDEX && region.cellIndex !== 0);
   const shippingCheckedList = [],
-    assemblyCheckedList = [];
+    assemblyCheckedList = [],
+    categoryObj = {};
 
   for (let i = 0; i < MAX_HORIZONTAL_BLOCK_COUNT; i++) {
     const shippingChecked = await isCellChecked(imageBuffer, shippingCheckedRegionList[i]);
@@ -175,6 +175,37 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
 
     shippingCheckedList[i] = shippingChecked;
     assemblyCheckedList[i] = assemblyChecked;
+  }
+
+  for (const region of CATEGORY_REGION_LIST) {
+    const { category, left, top, width, height } = region;
+
+    // DEBUG START
+
+    // let imgSegmentedRegion = await cropRegion(imageBuffer, left, top, width, height, 0);
+    // await imgSegmentedRegion.writeToFile(`./cache/debug/${category}.${IMAGE_FILE_TYPE.JPG}`); // write to file to debug
+
+    // DEBUG END
+
+    const isChecked = await isCellChecked(imageBuffer, region, 0.9);
+    categoryObj[category] = isChecked;
+  }
+
+  for (const region of RANK_REGION_LIST) {
+    const { rank, left, top, width, height } = region;
+
+    // DEBUG START
+
+    // let imgSegmentedRegion = await cropRegion(imageBuffer, left, top, width, height, 0);
+    // await imgSegmentedRegion.writeToFile(`./cache/debug/${rank}.${IMAGE_FILE_TYPE.JPG}`); // write to file to debug
+
+    // DEBUG END
+
+    const isChecked = await isCellChecked(imageBuffer, region);
+    if (isChecked) {
+      drawingRank = rank;
+      break;
+    }
   }
 
   // const shippingCheckedCount = countBy(shippingCheckedList, (i) => i == true).true;
@@ -185,19 +216,17 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
   //   return undefined;
   // }
 
-  console.log({ assemblyCheckedList, factoryCodeList });
-
   if (assemblyCheckedCount === 1) {
     const checkedIndex = assemblyCheckedList.findIndex((checked) => checked === true);
     const factory = factoryCodeList[checkedIndex];
-    return { factory, checked: Boolean(checkedIndex >= 0), isVNTec: factory === 'VT' };
+    return { factory, checked: Boolean(checkedIndex >= 0), isVNTec: factory === 'VT', drawingRank, categoryObj };
   } else if (assemblyCheckedCount > 1) {
     const factory = factoryCodeList.filter((f, i) => assemblyCheckedList[i]);
-    return { factory, checked: true, isVNTec: false };
+    return { factory, checked: true, isVNTec: false, drawingRank, categoryObj };
   }
 }
 
-export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
+export async function siteOfDrawingSegmentInfo(buffer, rotatedAngle = 0) {
   const tmpImg = new ImageHelper();
 
   const tesseractOcr = new OCRHelper();
@@ -208,10 +237,10 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
     tessedit_ocr_engine_mode: OEM.TESSERACT_LSTM_COMBINED,
   });
 
-  const TABLE_LEFT = PDF_ZOOM_RATIO * TABLE_REGION.LEFT - TABLE_REGION.PADDING,
-    TABLE_TOP = PDF_ZOOM_RATIO * TABLE_REGION.TOP - TABLE_REGION.PADDING,
-    TABLE_WIDTH = PDF_ZOOM_RATIO * TABLE_REGION.WIDTH + TABLE_REGION.PADDING * 2,
-    TABLE_HEIGHT = PDF_ZOOM_RATIO * TABLE_REGION.HEIGHT + TABLE_REGION.PADDING * 2;
+  const TABLE_LEFT = PDF_ZOOM_RATIO * SITE_TABLE_REGION.LEFT - SITE_TABLE_REGION.PADDING,
+    TABLE_TOP = PDF_ZOOM_RATIO * SITE_TABLE_REGION.TOP - SITE_TABLE_REGION.PADDING,
+    TABLE_WIDTH = PDF_ZOOM_RATIO * SITE_TABLE_REGION.WIDTH + SITE_TABLE_REGION.PADDING * 2,
+    TABLE_HEIGHT = PDF_ZOOM_RATIO * SITE_TABLE_REGION.HEIGHT + SITE_TABLE_REGION.PADDING * 2;
 
   tmpImg.read(buffer);
 
@@ -222,7 +251,7 @@ export async function segmentInfoRegion(buffer, rotatedAngle = 0) {
   await tmpImg.crop(TABLE_LEFT, TABLE_TOP, TABLE_WIDTH, TABLE_HEIGHT);
 
   // [!] after cropping, meta data is same??
-  // await tmpImg.writeToFile('./debug/testRegion.jpg');
+  // await tmpImg.writeToFile('./cache/debug/testRegion.jpg');
 
   tmpImg.greyscale().threshold();
 
@@ -412,7 +441,7 @@ async function cropRegion(buffer, left, top, width, height, angle) {
   return tmpImg;
 }
 
-async function isCellChecked(imageBuffer, region) {
+async function isCellChecked(imageBuffer, region, ratio = 0.8) {
   const { top, left, width, height } = region;
   const segmentedRegion = await cropRegion(
     imageBuffer,
@@ -426,5 +455,5 @@ async function isCellChecked(imageBuffer, region) {
 
   const { data } = await segmentedRegion.getRawBuffer();
   const pixelMatrix = new Uint8ClampedArray(data.buffer);
-  return !Boolean(pixelMatrix.filter((pixel) => pixel === 255).length / pixelMatrix.length > 0.8); // (number of white pixels / number of pixels) > 80% in cropRegion == not checked
+  return !Boolean(pixelMatrix.filter((pixel) => pixel === 255).length / pixelMatrix.length > ratio); // (number of white pixels / number of pixels) > 80% in cropRegion == not checked
 }
