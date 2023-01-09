@@ -110,7 +110,6 @@ export default class GnetHelper extends Web {
       await drnPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       const drawingURL = this.VIEW_PRINT_PAGE.replace("{{inhouseDc}}", inhouseDc);
       await drnPage.goto(drawingURL);
-      await drnPage.waitForNavigation({ waitUntil: 'networkidle2' })
       const checkBoxes = await drnPage.$$('#main input[type=checkbox]');
       for (const checkbox of checkBoxes) {
         await checkbox.click();
@@ -125,7 +124,6 @@ export default class GnetHelper extends Web {
 
       await popupPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       await popupPage.goto(this.VIEW_FORMAT_POPUP);
-      await popupPage.waitForNavigation({ waitUntil: 'networkidle2' });
       await popupPage.waitForTimeout(checkBoxes.length * 2500);
 
       const downloadURL = this.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);

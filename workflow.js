@@ -6,7 +6,7 @@ import { API } from './helpers';
 import { MAX_HISTORY_CHECK_FILES } from './helpers/constants/drawingFileConstants';
 import { checkFactoryDrawingByFile, checkFactoryDrawingOnTings } from './helpers/drawingFileHelper';
 import GnetHelper from './helpers/gnetsHelper';
-import { getTodayExcelData, getTodayExcelWithSite, sendMail, upsertDirectory } from './knowhow';
+import { getTodayExcelData, getTodayExcelWithSite, sendMail, upsertDirectory, getDateFromExcelValue } from './knowhow';
 
 const autoBotDebugger = debug('app:biz');
 
@@ -72,6 +72,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
   const tempDir = `./cache/temp/${format(now, 'YYYYMMDD')}`;
   const drawingsDir = `./cache/QLBV/${format(now, 'DD-MM-YYYY')}`;
 
+  let gnets;
+
   try {
     autoBotDebugger('===========================');
     autoBotDebugger('Bot tải bản vẽ');
@@ -134,7 +136,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
     const { BROWSER_OPTIONS } = botInfo;
 
-    const gnets = new GnetHelper(botInfo);
+    gnets = new GnetHelper(botInfo);
     await gnets.openBrowser(BROWSER_OPTIONS);
 
     if (!gnets.isBrowserOpened()) {
@@ -253,29 +255,35 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     }
 
     await upsertDirectory(todayDrawingDirectory)
-    for (const drawing of downloadDrawingList) {
-      console.log(drawing);
-      await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
-    }
-    // await Promise.all(downloadDrawingList.map(drawing => gnets.downloadDrawingFile(drawing, todayDrawingDirectory)))
+    // for (const drawing of downloadDrawingList) {
+    //   await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
+    // }
+    await Promise.all(downloadDrawingList.map(drawing => gnets.downloadDrawingFile(drawing, todayDrawingDirectory)))
 
-    const a = await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => api.apiPost({
-      url: URL,
-      encodedToken,
-      data: {
-        ...drawing,
-        poChecker,
-        performer,
-      },
-    })));
+    await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {
+      const partLineAll = drawingList.filter(d => d.inhouseDc === drawing.inhouseDc);
 
-    console.log(a);
+      return api.apiPost({
+        url: URL,
+        encodedToken,
+        data: {
+          ...drawing,
+          releasedDate: getDateFromExcelValue(drawing.releaseDate),
+          partLineAll,
+          poChecker,
+          performer,
+        },
+      })
+    }));
 
     await gnets.closeBrowser();
 
     //removeFolder(todayTempDirectory, { force: true });
     return { data: {} };
   } catch (error) {
+    if (gnets.isBrowserOpened()) {
+      gnets.closeBrowser()
+    }
     autoBotDebugger('error: ', error);
     return { error };
   }

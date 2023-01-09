@@ -13,6 +13,19 @@ import SMTP from './helpers/smtpHelper';
 
 const appBizDebugger = debug('app:biz');
 
+export function getDateFromExcelValue(excelDate) {
+  // JavaScript dates can be constructed by passing milliseconds
+  // since the Unix epoch (January 1, 1970) example: new Date(12312512312);
+
+  // 1. Subtract number of days between Jan 1, 1900 and Jan 1, 1970, plus 1 (Google "excel leap year bug")             
+  // 2. Convert to milliseconds.
+
+  const timezoneDate = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+  const timezone = 7;
+
+  return new Date(timezoneDate.setHours(timezoneDate.getHours() - timezone));
+}
+
 export const normalizeString = (s) => {
   return String(s).replace(/\&nbsp;/g, " ").replace(/\&lt;|\&gt;/g, " ").replace(/\s{1,}|\t{1,}/, " ");
 }
@@ -112,7 +125,7 @@ export function getTodayExcelData(excelFilePath) {
         aKeyNo: row[headers[3]],
         partNo: row[headers[4]],
         dwgNo: row[headers[5]],
-        name: row[headers[6]],
+        dwgName: row[headers[6]],
         dwgDiv: row[headers[7]],
         issue: row[headers[8]],
         dept: row[headers[9]],
