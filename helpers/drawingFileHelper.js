@@ -224,6 +224,7 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
     const factory = factoryCodeList.filter((f, i) => assemblyCheckedList[i]);
     return { factory, checked: true, isVNTec: false, drawingRank, categoryObj };
   }
+  return { drawingRank, categoryObj };
 }
 
 export async function siteOfDrawingSegmentInfo(buffer, rotatedAngle = 0) {

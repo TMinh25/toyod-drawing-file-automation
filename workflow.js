@@ -6,7 +6,7 @@ import { API } from './helpers';
 import { MAX_HISTORY_CHECK_FILES } from './helpers/constants/drawingFileConstants';
 import { checkFactoryDrawingByFile, checkFactoryDrawingOnTings } from './helpers/drawingFileHelper';
 import GnetHelper from './helpers/gnetsHelper';
-import { getTodayExcelData, getTodayExcelWithSite, sendMail, upsertDirectory, getDateFromExcelValue } from './knowhow';
+import { getDateFromExcelValue, getTodayExcelData, getTodayExcelWithSite, replaceSiteNames, sendMail, upsertDirectory } from './knowhow';
 
 const autoBotDebugger = debug('app:biz');
 
@@ -89,44 +89,15 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     const botInfo = secretList.find((secret) => secret.secretCode === BOT_INFO_SECRET_CODE).value;
     const supporting = secretList.find((secret) => secret.secretCode === SUPPORTING_SECRET_CODE).value;
 
-    const { URL, REPORT_URL, API_KEY, API_SECRET } = supporting;
+    const { URL, API_KEY, API_SECRET } = supporting;
     const token = `${API_KEY}:${API_SECRET}`;
     const encodedToken = Buffer.from(token).toString('base64');
 
     const api = new API();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
-    const lastDayOfMonth = new Date(year, month, 0);
 
     const todayTempDirectory = path.resolve(tempDir);
     const todayDrawingDirectory = path.resolve(drawingsDir);
     upsertDirectory(todayTempDirectory);
-
-    // if (now.getDate() === new Date(lastDayOfMonth).getDate()) {
-    //   try {
-    //     autoBotDebugger('Today is the last day of month => Getting report excel');
-
-    //     const data = await api.apiGet({ url: `${REPORT_URL}?month=${month}`, encodedToken });
-    //     const reportFile = await getCheckDrawingExcel(data.data, performer, poChecker);
-    //     const reportFileBuffer = await reportFile.writeBuffer();
-
-    //     const attachments = [
-    //       {
-    //         filename: `Bảng dữ liệu check bản vẽ trên GNETs - T${month}.xlsx`,
-    //         content: reportFileBuffer,
-    //         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    //       },
-    //     ];
-
-    //     await sendMail(SMTPConfig, mailTo, {
-    //       mailSubject: `Báo cáo tổng hợp bản vẽ của tháng ${month}/${year}`,
-    //       mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của tháng ${month}/${year}`,
-    //       attachments,
-    //     });
-    //   } catch (error) {
-    //     autoBotDebugger(error);
-    //   }
-    // }
 
     const downloadDrawingList = [];
 
@@ -134,7 +105,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       processedDrawings = [],
       skippedDrawings = [];
 
-    const { BROWSER_OPTIONS } = botInfo;
+    const { BROWSER_OPTIONS, SITE_NAMES } = botInfo;
 
     gnets = new GnetHelper(botInfo);
     await gnets.openBrowser(BROWSER_OPTIONS);
@@ -156,22 +127,6 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     }
 
     skippedDrawings = uniqBy(Array.from(drawingList)/*.filter(d => !d.isReceived)*/, 'inhouseDc')
-
-    // const prevDrawing = await gnets.getPreviousDrn({
-    //   received: false,
-    //   isReceived: false,
-    //   inhouseDc: 'MP22-00036-008',
-    //   customerDc: undefined,
-    //   aKeyNo: '2SW14230B5',
-    //   partNo: 'A34784-15',
-    //   dwgNo: '35020-GGZ-J020-M1',
-    //   name: 'SW ASSY, DIM/HORN/WINKER',
-    //   dwgDiv: '設',
-    //   issue: '金谷 陽斗',
-    // }, path.resolve(todayTempDirectory, 'MP22-00036-008'));
-
-    // const checkResult = await checkFactoryDrawingByFile(prevDrawing.filePath);
-    // console.log({ checkResult })
 
     // PROCESSING FILES
     do {
@@ -199,19 +154,21 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
             checkResult = await checkFactoryDrawingOnTings(drawing, gnets);
           }
 
-          if (!checkResult) {
-            autoBotDebugger(`${drawing.fileName} is not a detected, retrying previous drawing`);
+          autoBotDebugger(checkResult);
+
+          if (!checkResult.factory) {
+            autoBotDebugger(`${drawing.inhouseDc} (${drawing.aKeyNo}) is not a detected, retrying previous drawing`);
             skippedDrawings.push({ ...drawing, received: Boolean(drawing.received) });
             continue;
           }
 
-          autoBotDebugger(checkResult)
+          checkResult.factory = replaceSiteNames(checkResult.factory, SITE_NAMES);
 
-          const { factory, isVNTec, categoryObj } = checkResult;
-
+          const { factory, isVNTec } = checkResult;
           if (factory) {
             const result = { ...drawing, ...checkResult };
-            if (factory.length === 1 && isVNTec && !categoryObj["S0"]) {
+            const { categoryObj } = result;
+            if (isVNTec && (categoryObj["S1"] || categoryObj["MP"])) {
               downloadDrawingList.push(result);
             }
             processedDrawings.push(result);
@@ -254,10 +211,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       })
     }
 
-    await upsertDirectory(todayDrawingDirectory)
-    // for (const drawing of downloadDrawingList) {
-    //   await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
-    // }
+    await upsertDirectory(todayDrawingDirectory);
+
     await Promise.all(downloadDrawingList.map(drawing => gnets.downloadDrawingFile(drawing, todayDrawingDirectory)))
 
     await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {

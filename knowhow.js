@@ -13,6 +13,22 @@ import SMTP from './helpers/smtpHelper';
 
 const appBizDebugger = debug('app:biz');
 
+export function replaceSiteNames(sites, replaceNames) {
+  if (typeof sites === 'string') {
+    if (replaceNames[sites]) {
+      return replaceNames[sites];
+    }
+    return sites;
+  } else if (isArray(sites)) {
+    return sites.map((site) => {
+      if (replaceNames[site]) {
+        return replaceNames[site];
+      }
+      return site;
+    });
+  }
+}
+
 export function getDateFromExcelValue(excelDate) {
   // JavaScript dates can be constructed by passing milliseconds
   // since the Unix epoch (January 1, 1970) example: new Date(12312512312);
@@ -95,7 +111,7 @@ export async function upsertDirectory(folderPath) {
       await fse.ensureDir(folderPath);
       fse.chmodSync(folderPath, '777');
     } else {
-      fse.rmSync(folderPath, { recursive: true, force: true });
+      // fse.rmSync(folderPath, { recursive: true, force: true });
       await fse.ensureDir(folderPath);
     }
   } catch (err) {
@@ -182,7 +198,7 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.aKeyNo,
           row.partNo,
           row.dwgNo,
-          row.name,
+          row.dwgName,
           site.drawingRank ? site.drawingRank : row.dwgDiv,
           row.issue,
           row.dept,
