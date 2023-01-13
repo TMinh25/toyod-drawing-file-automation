@@ -6,7 +6,7 @@ import { API } from './helpers';
 import { MAX_HISTORY_CHECK_FILES } from './helpers/constants/drawingFileConstants';
 import { checkFactoryDrawingByFile, checkFactoryDrawingOnTings } from './helpers/drawingFileHelper';
 import GnetHelper from './helpers/gnetsHelper';
-import { getDateFromExcelValue, getTodayExcelData, getTodayExcelWithSite, replaceSiteNames, sendMail, upsertDirectory } from './knowhow';
+import { getDateFromExcelValue, getTodayExcelData, getTodayExcelWithSite, removeFolder, replaceSiteNames, sendMail, upsertDirectory } from './knowhow';
 
 const autoBotDebugger = debug('app:biz');
 
