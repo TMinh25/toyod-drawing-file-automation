@@ -213,7 +213,9 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
     await upsertDirectory(todayDrawingDirectory);
 
-    await Promise.all(downloadDrawingList.map(drawing => gnets.downloadDrawingFile(drawing, todayDrawingDirectory)))
+    for (const drawing of downloadDrawingList) {
+      await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
+    }
 
     await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {
       const partLineAll = drawingList.filter(d => d.inhouseDc === drawing.inhouseDc);
@@ -231,9 +233,10 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       })
     }));
 
-    await gnets.closeBrowser();
-
-    //removeFolder(todayTempDirectory, { force: true });
+    if (gnets.isBrowserOpened()) {
+      await gnets.closeBrowser();
+    }
+    removeFolder(todayTempDirectory, { force: true });
     return { data: {} };
   } catch (error) {
     if (gnets.isBrowserOpened()) {
