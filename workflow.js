@@ -206,8 +206,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         attacgments: [],
         mailSubject: `Tổng hợp bản vẽ không thể tìm nơi lắp ráp của ngày ${nowUserDateFormatted}`,
         mailBody: `<b>Hệ thống autobot xin gửi lại danh sách bản vẽ không thể xử lý của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}</b>\n
-          Danh sách gồm: 
-          ${skippedDrawings.map(d => `- ${d.inhouseDc} (${d.partNo})<br/>`)}`
+          Danh sách gồm: <br/>
+          ${skippedDrawings.map(d => `- ${d.inhouseDc} ${d.partNo ? `(${d.partNo})` : ""}<br/>`)}`
       })
     }
 
