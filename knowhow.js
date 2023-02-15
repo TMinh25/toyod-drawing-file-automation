@@ -199,7 +199,7 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.partNo,
           row.dwgNo,
           row.dwgName,
-          site.drawingRank ? site.drawingRank : row.dwgDiv,
+          (site && site.drawingRank) ? site.drawingRank : row.dwgDiv,
           row.issue,
           row.dept,
           row.releaseDate,
