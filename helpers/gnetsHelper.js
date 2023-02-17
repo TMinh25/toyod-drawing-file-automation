@@ -180,12 +180,22 @@ export default class GnetHelper extends Web {
       const rows = await releasedPage.$$(RELEASED_PAGE_SELECTOR.TABLE_ROWS);
       let result;
 
+      const newDwgDivExists = rows.some(async (row) => {
+        const id = await (await row.getProperty("id")).jsonValue();
+        if (String(id).match(/^row_\d{1,}/)) {
+          const dwgDivCell = await row.$("td:nth-child(7)");
+          const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
+          if (dwgDiv === newDwgDivValue) return true;
+          return false;
+        }
+      });
+
       for (const row of rows) {
         const id = await (await row.getProperty("id")).jsonValue();
         if (String(id).match(/^row_\d{1,}/)) {
           const dwgDivCell = await row.$("td:nth-child(7)");
           const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
-          if (dwgDiv === newDwgDivValue) {
+          if (newDwgDivExists ? (dwgDiv === newDwgDivValue) : true) {
             const inhouseDcCell = await row.$("td:nth-child(2)");
             const inhouseDc = String(await (await inhouseDcCell.getProperty('innerText')).jsonValue()).trim();
 
