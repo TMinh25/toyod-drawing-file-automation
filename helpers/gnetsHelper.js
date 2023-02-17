@@ -3,7 +3,7 @@ import debug from 'debug';
 import fse from 'fs-extra';
 import path from 'path';
 import { getFilesInFolder, getTrueAKeyNo, upsertDirectory } from '../knowhow';
-import { CSS_SELECTOR } from './constants/drawingFileConstants';
+import { CSS_SELECTOR, newDwgDivValue } from './constants/drawingFileConstants';
 import { OPTIMIZED_WEB_VIEWPORT } from './constants/webConstant';
 import Web from './webHelper';
 
@@ -185,22 +185,22 @@ export default class GnetHelper extends Web {
         if (String(id).match(/^row_\d{1,}/)) {
           const dwgDivCell = await row.$("td:nth-child(7)");
           const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
-          // if (dwgDiv === newDwgDivValue) {
-          const inhouseDcCell = await row.$("td:nth-child(2)");
-          const inhouseDc = String(await (await inhouseDcCell.getProperty('innerText')).jsonValue()).trim();
+          if (dwgDiv === newDwgDivValue) {
+            const inhouseDcCell = await row.$("td:nth-child(2)");
+            const inhouseDc = String(await (await inhouseDcCell.getProperty('innerText')).jsonValue()).trim();
 
-          const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
-          const prevDrawingBuffer = await axios.get(drnURL, this.downloadFileOptions);
-          await upsertDirectory(dir);
-          const prevDrnFilePath = path.resolve(dir, `${inhouseDc} - prevDrn.pdf`);
-          fse.writeFileSync(prevDrnFilePath, prevDrawingBuffer.data);
-          result = {
-            filePath: prevDrnFilePath,
-            buffer: prevDrawingBuffer.data,
-            inhouseDc,
+            const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
+            const prevDrawingBuffer = await axios.get(drnURL, this.downloadFileOptions);
+            await upsertDirectory(dir);
+            const prevDrnFilePath = path.resolve(dir, `${inhouseDc} - prevDrn.pdf`);
+            fse.writeFileSync(prevDrnFilePath, prevDrawingBuffer.data);
+            result = {
+              filePath: prevDrnFilePath,
+              buffer: prevDrawingBuffer.data,
+              inhouseDc,
+            }
+            break;
           }
-          break;
-          // }
         }
       }
       await releasedPage.close();
