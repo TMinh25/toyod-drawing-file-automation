@@ -102,7 +102,7 @@ export default class GnetHelper extends Web {
       if (!this.isBrowserOpened()) {
         this.login();
       }
-      const { inhouseDc, partNo } = drawing;
+      const { dwgNo, inhouseDc, pKeyNo } = drawing;
 
       const drnPage = await this.browser.newPage();
       await drnPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
@@ -127,17 +127,17 @@ export default class GnetHelper extends Web {
       const downloadURL = this.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);
       const downloadRes = await axios.get(downloadURL, this.downloadFileOptions);
       drawing.dir = todayDrawingDirectory;
-      const drawingFilePath = path.resolve(todayDrawingDirectory, `${inhouseDc} (${partNo}).pdf`);
+      const drawingFilePath = path.resolve(todayDrawingDirectory, `${dwgNo} (${pKeyNo}).pdf`);
       fse.writeFileSync(drawingFilePath, downloadRes.data);
       drawing.fullFilePath = drawingFilePath;
-      drawing.fileName = `${inhouseDc} (${partNo}).pdf`;
+      drawing.fileName = `${dwgNo} (${pKeyNo}).pdf`;
       drawing.buffer = downloadRes.data;
       await Promise.all([drnPage.close(), popupPage.close()]);
 
       return {
         dir: todayDrawingDirectory,
         fullFilePath: drawingFilePath,
-        fileName: `${inhouseDc} (${partNo}).pdf`,
+        fileName: `${dwgNo} (${pKeyNo}).pdf`,
         buffer: downloadRes.data,
       };
     } catch (error) {

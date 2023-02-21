@@ -46,24 +46,24 @@ export const normalizeString = (s) => {
   return String(s).replace(/\&nbsp;/g, " ").replace(/\&lt;|\&gt;/g, " ").replace(/\s{1,}|\t{1,}/, " ");
 }
 
-export const getHighestSubCode = (partNoWithSub, partNoList = []) => {
+export const getHighestSubCode = (pKeyNoWithSub, partNoList = []) => {
   const subNoRegex = /-\d{2,}/
 
-  if (!partNoWithSub) {
+  if (!pKeyNoWithSub) {
     return undefined;
   }
 
-  if (!partNoWithSub.match(subNoRegex)) {
-    return partNoWithSub;
+  if (!pKeyNoWithSub.match(subNoRegex)) {
+    return pKeyNoWithSub;
   }
 
-  const subNo = Number(partNoWithSub.slice(-2));
-  const partNo = partNoWithSub.slice(0, 6);
+  const subNo = Number(pKeyNoWithSub.slice(-2));
+  const pKeyNo = pKeyNoWithSub.slice(0, 6);
   let highestSub = 0;
 
   Array.from(partNoList).forEach((no) => {
     const part = no.slice(0, 6);
-    if (part.toLowerCase() == partNo.toLowerCase() && no.match(subNoRegex)) {
+    if (part.toLowerCase() == pKeyNo.toLowerCase() && no.match(subNoRegex)) {
       const sub = Number(no.slice(-2));
 
       if (sub > highestSub && sub <= subNo) {
@@ -72,8 +72,8 @@ export const getHighestSubCode = (partNoWithSub, partNoList = []) => {
     }
   });
 
-  const highestCode = partNo + `-${('00' + highestSub).slice(-2)}`;
-  return { partNo, subNo, highestCode, highestSub };
+  const highestCode = pKeyNo + `-${('00' + highestSub).slice(-2)}`;
+  return { pKeyNo, subNo, highestCode, highestSub };
 }
 
 export const getTrueAKeyNo = (aKeyNo) => {
@@ -139,7 +139,7 @@ export function getTodayExcelData(excelFilePath) {
         inhouseDc: row[headers[1]],
         customerDc: row[headers[2]],
         aKeyNo: row[headers[3]],
-        partNo: row[headers[4]],
+        pKeyNo: row[headers[4]],
         dwgNo: row[headers[5]],
         dwgName: row[headers[6]],
         dwgDiv: row[headers[7]],
@@ -196,7 +196,7 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.inhouseDc,
           row.customerDc,
           row.aKeyNo,
-          row.partNo,
+          row.pKeyNo,
           row.dwgNo,
           row.dwgName,
           (site && site.drawingRank) ? site.drawingRank : row.dwgDiv,

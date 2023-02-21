@@ -95,7 +95,7 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   if (partNoList.length > 0 && siteList.length > 0) {
     const highestSubCode = getHighestSubCode(partNo, partNoList);
     if (highestSubCode) {
-      const { partNo, subNo, highestCode } = highestSubCode;
+      const { pKeyNo, subNo, highestCode } = highestSubCode;
       const siteIndexes = []
       partNoList.forEach((no, i) => {
         if (no === highestCode) {
