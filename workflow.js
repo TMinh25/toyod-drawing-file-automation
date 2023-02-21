@@ -26,42 +26,42 @@ const secretListCode = [
   SUPPORTING_SECRET_CODE,
 ];
 
-const testDrawings = [
-  {
-    fileId: 1,
-    fileName: 'test1.pdf',
-    fullFilePath: './samples/pdf/test.pdf',
-  },
-  {
-    fileId: 2,
-    fileName: 'test2.pdf',
-    fullFilePath: './samples/pdf/test2.pdf',
-  },
-  {
-    fileId: 3,
-    partNo: 'A34232',
-    fileName: 'test3.pdf',
-    fullFilePath: './samples/pdf/test3.pdf',
-  },
-  {
-    fileId: 4,
-    partNo: 'A34232',
-    fileName: 'test4.pdf',
-    fullFilePath: './samples/pdf/test4.pdf',
-  },
-  {
-    fileId: 5,
-    partNo: 'A34232',
-    fileName: 'test5.pdf',
-    fullFilePath: './samples/pdf/test5.pdf',
-  },
-  {
-    fileId: 6,
-    partNo: 'A34232',
-    fileName: 'test6.pdf',
-    fullFilePath: './samples/pdf/test6.pdf',
-  },
-]
+// const testDrawings = [
+//   {
+//     fileId: 1,
+//     fileName: 'test1.pdf',
+//     fullFilePath: './samples/pdf/test.pdf',
+//   },
+//   {
+//     fileId: 2,
+//     fileName: 'test2.pdf',
+//     fullFilePath: './samples/pdf/test2.pdf',
+//   },
+//   {
+//     fileId: 3,
+//     pKeyNo: 'A34232',
+//     fileName: 'test3.pdf',
+//     fullFilePath: './samples/pdf/test3.pdf',
+//   },
+//   {
+//     fileId: 4,
+//     pKeyNo: 'A34232',
+//     fileName: 'test4.pdf',
+//     fullFilePath: './samples/pdf/test4.pdf',
+//   },
+//   {
+//     fileId: 5,
+//     pKeyNo: 'A34232',
+//     fileName: 'test5.pdf',
+//     fullFilePath: './samples/pdf/test5.pdf',
+//   },
+//   {
+//     fileId: 6,
+//     pKeyNo: 'A34232',
+//     fileName: 'test6.pdf',
+//     fullFilePath: './samples/pdf/test6.pdf',
+//   },
+// ]
 
 export default async (payload, secretList, autobotCode, autobotSecret) => {
 
@@ -207,7 +207,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         mailSubject: `Tổng hợp bản vẽ không thể tìm nơi lắp ráp của ngày ${nowUserDateFormatted}`,
         mailBody: `<b>Hệ thống autobot xin gửi lại danh sách bản vẽ không thể xử lý của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}</b>\n
           Danh sách gồm: <br/>
-          ${skippedDrawings.map(d => `- ${d.inhouseDc} ${d.partNo ? `(${d.partNo})` : ""}<br/>`)}`
+          ${skippedDrawings.map(d => `- ${d.inhouseDc} ${d.pKeyNo ? `(${d.pKeyNo})` : ""}<br/>`)}`
       })
     }
 

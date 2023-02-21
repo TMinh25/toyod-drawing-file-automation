@@ -46,7 +46,7 @@ export const normalizeString = (s) => {
   return String(s).replace(/\&nbsp;/g, " ").replace(/\&lt;|\&gt;/g, " ").replace(/\s{1,}|\t{1,}/, " ");
 }
 
-export const getHighestSubCode = (pKeyNoWithSub, partNoList = []) => {
+export const getHighestSubCode = (pKeyNoWithSub, pKeyNoList = []) => {
   const subNoRegex = /-\d{2,}/
 
   if (!pKeyNoWithSub) {
@@ -61,7 +61,7 @@ export const getHighestSubCode = (pKeyNoWithSub, partNoList = []) => {
   const pKeyNo = pKeyNoWithSub.slice(0, 6);
   let highestSub = 0;
 
-  Array.from(partNoList).forEach((no) => {
+  Array.from(pKeyNoList).forEach((no) => {
     const part = no.slice(0, 6);
     if (part.toLowerCase() == pKeyNo.toLowerCase() && no.match(subNoRegex)) {
       const sub = Number(no.slice(-2));
@@ -133,7 +133,7 @@ export function getTodayExcelData(excelFilePath) {
 
     const drawing = [];
     for (const row of excelData) {
-      drawing.push({
+      const drawingRow = {
         received: row[headers[0]],
         isReceived: Boolean(row[headers[0]]),
         inhouseDc: row[headers[1]],
@@ -156,7 +156,16 @@ export function getTodayExcelData(excelFilePath) {
         partName: row[headers[18]],
         size: row[headers[19]],
         cause: row[headers[20]],
-      });
+      };
+
+      if (!drawingRow.aKeyNo && drawingRow.oldKeyNo) {
+        drawingRow.aKeyNo = drawingRow.oldKeyNo;
+      }
+      if (!drawingRow.pKeyNo && drawingRow.newKeyNo) {
+        drawingRow.pKeyNo = drawingRow.newKeyNo;
+      }
+
+      drawing.push(drawingRow);
     }
 
     const mergeStartRowIndex = [...new Set(worksheet['!merges'].map((item) => item.s.r))];

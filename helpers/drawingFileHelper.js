@@ -42,8 +42,8 @@ const TO_BASE64 = true;
 // }
 
 export async function checkFactoryDrawingOnTings(drawing, webHelper) {
-  const { partNo } = drawing;
-  if (!partNo) {
+  const { pKeyNo } = drawing;
+  if (!pKeyNo) {
     return undefined;
   }
 
@@ -53,7 +53,7 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   });
 
   const subNoRegex = /-\d{2,}$/
-  const partCode = partNo.match(subNoRegex) ? partNo.slice(0, 6) : partNo;
+  const partCode = pKeyNo.match(subNoRegex) ? pKeyNo.slice(0, 6) : pKeyNo;
 
   await tingsPage.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partCode);
   const searchButton = await tingsPage.$(CSS_SELECTOR.TINGS.SEARCH_BUTTON);
@@ -65,18 +65,18 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   totalRecord = totalRecord.slice(totalRecord.indexOf(":") + 1, 17)
   const totalPage = Math.ceil(totalRecord / 50);
 
-  const partNoList = [], siteList = [];
+  const pKeyNoList = [], siteList = [];
   let page = 1;
 
   do {
     const rows = await tingsPage.$$(CSS_SELECTOR.TINGS.TABLE_ROWS);
 
     for (const row of rows) {
-      const partNoCell = await row.$('td:nth-child(2)');
-      const partNoValue = String(await (await partNoCell.getProperty('innerText')).jsonValue());
+      const pKeyNoCell = await row.$('td:nth-child(2)');
+      const pKeyNoValue = String(await (await pKeyNoCell.getProperty('innerText')).jsonValue());
       const siteCell = await row.$('td:nth-child(10)');
       const siteValue = String(await (await siteCell.getProperty('innerText')).jsonValue());
-      partNoList.push(partNoValue);
+      pKeyNoList.push(pKeyNoValue);
       siteList.push(siteValue);
     }
     if (page < totalPage) {
@@ -92,12 +92,12 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
 
   let site;
 
-  if (partNoList.length > 0 && siteList.length > 0) {
-    const highestSubCode = getHighestSubCode(partNo, partNoList);
+  if (pKeyNoList.length > 0 && siteList.length > 0) {
+    const highestSubCode = getHighestSubCode(pKeyNo, pKeyNoList);
     if (highestSubCode) {
       const { pKeyNo, subNo, highestCode } = highestSubCode;
       const siteIndexes = []
-      partNoList.forEach((no, i) => {
+      pKeyNoList.forEach((no, i) => {
         if (no === highestCode) {
           siteIndexes.push(i);
         };
@@ -437,7 +437,7 @@ async function cropRegion(buffer, left, top, width, height, angle) {
   }
 
   await tmpImg.crop(left, top, width, height);
-  // await img.writeToFile(`./temp/partNo.${IMAGE_FILE_TYPE.JPG}`);
+  // await img.writeToFile(`./temp/pKeyNo.${IMAGE_FILE_TYPE.JPG}`);
 
   return tmpImg;
 }
