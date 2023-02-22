@@ -2,6 +2,7 @@ import { format } from 'date-and-time';
 import debug from 'debug';
 import { isEmpty, uniqBy } from 'lodash';
 import path from 'path';
+import { performance } from 'perf_hooks';
 import { API } from './helpers';
 import { MAX_HISTORY_CHECK_FILES } from './helpers/constants/drawingFileConstants';
 import { checkFactoryDrawingByFile, checkFactoryDrawingOnTings } from './helpers/drawingFileHelper';
@@ -107,8 +108,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
     const { BROWSER_OPTIONS, SITE_NAMES } = botInfo;
 
-    const startTime = performance.now()
-
+    const startTime = performance.now();
     gnets = new GnetHelper(botInfo);
     await gnets.openBrowser(BROWSER_OPTIONS);
 
