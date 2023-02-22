@@ -201,15 +201,14 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
       const totalDrawingQty = [...processedDrawings, ...skippedDrawings].length;
       const VNTecDrawings = processedDrawings.filter(d => d.isVNTec);
-      const VNTecDrawingStringList = VNTecDrawings.map(d => `- ${d.dwgNo} ${d.pKeyNo && `(${d.pKeyNo})`}<br/>`);
-      const skippedDrawingStringList = skippedDrawings.map(d => `- ${d.dwgNo} ${d.pKeyNo && `(${d.pKeyNo})`}<br/>`);
+      const skippedDrawingStringList = skippedDrawings.map(d => `- ${d.dwgNo} ${d.pKeyNo && `(${d.pKeyNo})`}<br/>`).join("");
       await sendMail(SMTPConfig, mailTo, {
         mailSubject: `Tổng hợp bản vẽ của ngày ${nowUserDateFormatted}`,
         mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}. <br/>
         Tổng số bản vẽ được xử lý: ${totalDrawingQty}<br/>
         Thời gian xử lý ${totalDrawingQty} bản vẽ: ${milisecondsToTimeFormat(endTime - startTime)}<br/>
-        ${VNTecDrawings.length > 0 && `Số lượng bản vẽ VNTec: <br/> ${VNTecDrawingStringList.length}`}<br/>
-        ${skippedDrawings.length > 0 && `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList.map(d => d)}`}<br/>`,
+        ${VNTecDrawings.length > 0 && `Số lượng bản vẽ VNTec: <br/> ${VNTecDrawings.length}`}<br/>
+        ${skippedDrawings.length > 0 && `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}`}<br/>`,
         attachments,
       });
     }
