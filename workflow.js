@@ -6,7 +6,7 @@ import { API } from './helpers';
 import { MAX_HISTORY_CHECK_FILES } from './helpers/constants/drawingFileConstants';
 import { checkFactoryDrawingByFile, checkFactoryDrawingOnTings } from './helpers/drawingFileHelper';
 import GnetHelper from './helpers/gnetsHelper';
-import { getDateFromExcelValue, getTodayExcelData, getTodayExcelWithSite, removeFolder, replaceSiteNames, sendMail, upsertDirectory } from './knowhow';
+import { getDateFromExcelValue, getTodayExcelData, getTodayExcelWithSite, removeFolder, replaceSiteNames, milisecondsToTimeFormat, sendMail, upsertDirectory } from './knowhow';
 
 const autoBotDebugger = debug('app:biz');
 
@@ -107,6 +107,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
     const { BROWSER_OPTIONS, SITE_NAMES } = botInfo;
 
+    const startTime = performance.now()
+
     gnets = new GnetHelper(botInfo);
     await gnets.openBrowser(BROWSER_OPTIONS);
 
@@ -182,7 +184,9 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
     autoBotDebugger({ processedDrawings, skippedDrawings });
 
-    if (processedDrawings.length > 0) {
+    const endTime = performance.now();
+
+    if ([...processedDrawings, ...skippedDrawings].length > 0) {
       const todayExcelBuffer = await getTodayExcelWithSite(processedDrawings, drawingList, mergeRows);
 
       autoBotDebugger(`Sending current's drawing to user's email...`);
@@ -195,20 +199,19 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         },
       ];
 
+      const totalDrawingQty = [...processedDrawings, ...skippedDrawings].length;
+      const VNTecDrawings = processedDrawings.filter(d => d.isVNTec);
+      const VNTecDrawingStringList = VNTecDrawings.map(d => `- ${d.dwgNo} ${d.pKeyNo && `(${d.pKeyNo})`}<br/>`);
+      const skippedDrawingStringList = skippedDrawings.map(d => `- ${d.dwgNo} ${d.pKeyNo && `(${d.pKeyNo})`}<br/>`);
       await sendMail(SMTPConfig, mailTo, {
         mailSubject: `Tổng hợp bản vẽ của ngày ${nowUserDateFormatted}`,
-        mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}`,
+        mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}. <br/>
+        Tổng số bản vẽ được xử lý: ${totalDrawingQty}<br/>
+        Thời gian xử lý ${totalDrawingQty} bản vẽ: ${milisecondsToTimeFormat(endTime - startTime)}<br/>
+        ${VNTecDrawings.length > 0 && `Số lượng bản vẽ VNTec: <br/> ${VNTecDrawingStringList.length}`}<br/>
+        ${skippedDrawings.length > 0 && `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList.map(d => d)}`}<br/>`,
         attachments,
       });
-    }
-    if (skippedDrawings.length > 0) {
-      await sendMail(SMTPConfig, mailTo, {
-        attacgments: [],
-        mailSubject: `Tổng hợp bản vẽ không thể tìm nơi lắp ráp của ngày ${nowUserDateFormatted}`,
-        mailBody: `<b>Hệ thống autobot xin gửi lại danh sách bản vẽ không thể xử lý của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}</b>\n
-          Danh sách gồm: <br/>
-          ${skippedDrawings.map(d => `- ${d.inhouseDc} ${d.pKeyNo ? `(${d.pKeyNo})` : ""}<br/>`)}`
-      })
     }
 
     await upsertDirectory(todayDrawingDirectory);
