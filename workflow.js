@@ -207,8 +207,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}. <br/>
         Tổng số bản vẽ được xử lý: ${totalDrawingQty}<br/>
         Thời gian xử lý ${totalDrawingQty} bản vẽ: ${milisecondsToTimeFormat(endTime - startTime)}<br/>
-        ${VNTecDrawings.length > 0 && `Số lượng bản vẽ VNTec: <br/> ${VNTecDrawings.length}`}<br/>
-        ${skippedDrawings.length > 0 && `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}`}<br/>`,
+        ${VNTecDrawings.length > 0 ? `Số lượng bản vẽ VNTec: <br/> ${VNTecDrawings.length}` : ""}<br/>
+        ${skippedDrawings.length > 0 ? `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}` : ""}<br/>`,
         attachments,
       });
     }
