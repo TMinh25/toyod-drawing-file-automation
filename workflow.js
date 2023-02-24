@@ -209,21 +209,21 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       });
     }
 
-    // await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {
-    //   const partLineAll = drawingList.filter(d => d.inhouseDc === drawing.inhouseDc);
+    await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {
+      const partLineAll = drawingList.filter(d => d.inhouseDc === drawing.inhouseDc);
 
-    //   return api.apiPost({
-    //     url: URL,
-    //     encodedToken,
-    //     data: {
-    //       ...drawing,
-    //       releasedDate: getDateFromExcelValue(drawing.releaseDate),
-    //       partLineAll,
-    //       poChecker,
-    //       performer,
-    //     },
-    //   })
-    // }));
+      return api.apiPost({
+        url: URL,
+        encodedToken,
+        data: {
+          ...drawing,
+          releasedDate: getDateFromExcelValue(drawing.releaseDate),
+          partLineAll,
+          poChecker,
+          performer,
+        },
+      })
+    }));
 
     await upsertDirectory(todayDrawingDirectory);
 
