@@ -1,4 +1,3 @@
-import { execSync } from 'child_process';
 import { format } from 'date-and-time';
 import debug from 'debug';
 import fs from 'fs';
@@ -7,6 +6,7 @@ import { isArray } from 'lodash';
 import path from 'path';
 import { readFile, utils } from 'xlsx';
 import { Excel } from './helpers';
+import { otSubNoRegex, subNoRegex } from './helpers/constants/drawingFileConstants';
 import { emptyCellBorder, emptyCellStyle } from './helpers/constants/excelConstant';
 import { getHeadersXLSX } from './helpers/excelHelper';
 import SMTP from './helpers/smtpHelper';
@@ -47,42 +47,57 @@ export const normalizeString = (s) => {
 }
 
 export const getHighestSubCode = (pKeyNoWithSub, pKeyNoList = []) => {
-  const subNoRegex = /-\d{2,}/
-
   if (!pKeyNoWithSub) {
     return undefined;
   }
 
-  if (!pKeyNoWithSub.match(subNoRegex)) {
-    return pKeyNoWithSub;
-  }
-
-  const subNo = Number(pKeyNoWithSub.slice(-2));
-  const pKeyNo = pKeyNoWithSub.slice(0, 6);
+  const subNo = getSubNumber(pKeyNoWithSub);
+  const pKeyNo = getTruePKeyNo(pKeyNoWithSub);
   let highestSub = 0;
 
   Array.from(pKeyNoList).forEach((no) => {
-    const part = no.slice(0, 6);
-    if (part.toLowerCase() == pKeyNo.toLowerCase() && no.match(subNoRegex)) {
-      const sub = Number(no.slice(-2));
+    const sub = getSubNumber(no);
 
-      if (sub > highestSub && sub <= subNo) {
-        highestSub = sub;
-      }
+    if (sub > highestSub && sub <= subNo - 1) {
+      highestSub = sub;
     }
   });
+
+  if (!highestSub) {
+    return undefined;
+  }
+
+  // if (pKeyNoWithSub.match(otSubNoRegex)) {
+  //   highestSub -= 1;
+  // }
 
   const highestCode = pKeyNo + `-${('00' + highestSub).slice(-2)}`;
   return { pKeyNo, subNo, highestCode, highestSub };
 }
 
 export const getTrueAKeyNo = (aKeyNo) => {
-  const subKeyNoRegex = /\w{1}\d{1}$/
+  const subKeyNoRegex = /\w{1}\d{1}$/;
   if (!String(aKeyNo).match(subKeyNoRegex)) {
     return String(aKeyNo);
   } else {
     return String(aKeyNo).slice(0, aKeyNo.length - 2);
   }
+}
+
+export const getSubNumber = pKeyNo => {
+  return pKeyNo.match(otSubNoRegex) ?
+    Number(pKeyNo.split("A").at(-1).replace(/\D/g, '')) :
+    pKeyNo.match(subNoRegex) ?
+      Number(pKeyNo.split("-").at(-1)) :
+      1;
+}
+
+export const getTruePKeyNo = (pKeyNo) => {
+  return pKeyNo.match(otSubNoRegex) ?
+    pKeyNo.slice(0, -2) :
+    pKeyNo.match(subNoRegex) ?
+      pKeyNo.slice(0, 6) :
+      pKeyNo;
 }
 
 export const stringEqual = (s1, s2) => String(s1).toLowerCase().trim() === String(s2).toLowerCase().trim();
@@ -134,8 +149,7 @@ export function getTodayExcelData(excelFilePath) {
     const drawing = [];
     for (const row of excelData) {
       const drawingRow = {
-        received: row[headers[0]],
-        isReceived: Boolean(row[headers[0]]),
+        receive: Boolean(row[headers[0]]),
         inhouseDc: row[headers[1]],
         customerDc: row[headers[2]],
         aKeyNo: row[headers[3]],
@@ -201,7 +215,7 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
       worksheet.insertRow(
         3,
         [
-          row.received,
+          row.receive ? 'a' : undefined,
           row.inhouseDc,
           row.customerDc,
           row.aKeyNo,
@@ -215,10 +229,10 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.dwgType,
           row.oldKeyNo,
           row.newKeyNo,
-          row.add,
-          row.discon,
-          row['CD/C'],
-          row['ID/C'],
+          row.add ? 'a' : undefined,
+          row.discon ? 'a' : undefined,
+          row['CD/C'] ? 'a' : undefined,
+          row['ID/C'] ? 'a' : undefined,
           row.partName,
           row.size,
           row.cause,

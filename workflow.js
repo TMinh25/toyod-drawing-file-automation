@@ -128,7 +128,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
     }
 
-    skippedDrawings = uniqBy(Array.from(drawingList)/*.filter(d => !d.isReceived)*/, 'inhouseDc')
+    skippedDrawings = uniqBy(Array.from(drawingList), 'inhouseDc')
 
     // PROCESSING FILES
     do {
@@ -147,11 +147,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
             checkResult = await checkFactoryDrawingByFile(drnFilePath);
             drawing = { ...drawing, ...checkResult }
           } else if (loopCount < MAX_HISTORY_CHECK_FILES) { // Tải bản vẽ trước đó của bản vẽ
-            const prevDrawing = await gnets.getPreviousDrn(drawing, todayTempDirectory);
-            drawing.prevDrawing = prevDrawing;
-            checkResult = await checkFactoryDrawingByFile(drawing.prevDrawing.filePath);
-            delete checkResult.drawingRank;
-            delete checkResult.categoryObj;
+            checkResult = await gnets.getPreviousDrn(drawing, todayTempDirectory);
           } else if (loopCount === MAX_HISTORY_CHECK_FILES) { // Check trên tings
             checkResult = await checkFactoryDrawingOnTings(drawing, gnets);
           }
@@ -207,33 +203,33 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}. <br/>
         Tổng số bản vẽ được xử lý: ${totalDrawingQty}<br/>
         Thời gian xử lý ${totalDrawingQty} bản vẽ: ${milisecondsToTimeFormat(endTime - startTime)}<br/>
-        ${VNTecDrawings.length > 0 ? `Số lượng bản vẽ VNTec: <br/> ${VNTecDrawings.length}` : ""}<br/>
+        ${VNTecDrawings.length > 0 ? `Số lượng bản vẽ VNTec: ${VNTecDrawings.length}` : ""}<br/>
         ${skippedDrawings.length > 0 ? `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}` : ""}<br/>`,
         attachments,
       });
     }
+
+    // await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {
+    //   const partLineAll = drawingList.filter(d => d.inhouseDc === drawing.inhouseDc);
+
+    //   return api.apiPost({
+    //     url: URL,
+    //     encodedToken,
+    //     data: {
+    //       ...drawing,
+    //       releasedDate: getDateFromExcelValue(drawing.releaseDate),
+    //       partLineAll,
+    //       poChecker,
+    //       performer,
+    //     },
+    //   })
+    // }));
 
     await upsertDirectory(todayDrawingDirectory);
 
     for (const drawing of downloadDrawingList) {
       await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
     }
-
-    await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {
-      const partLineAll = drawingList.filter(d => d.inhouseDc === drawing.inhouseDc);
-
-      return api.apiPost({
-        url: URL,
-        encodedToken,
-        data: {
-          ...drawing,
-          releasedDate: getDateFromExcelValue(drawing.releaseDate),
-          partLineAll,
-          poChecker,
-          performer,
-        },
-      })
-    }));
 
     if (gnets.isBrowserOpened()) {
       await gnets.closeBrowser();

@@ -170,7 +170,7 @@ export const RANK_REGION_LIST = [
 export const BLOCK_PADDING = 15;
 export const FACTORY_BLOCK_PADDING = 7;
 export const DEBUG_FOLDER = './cache/debug';
-export const newDwgDivValue = '設'; // SHIN = NEW
+export const newDwgDivValue = '新' // SHIN = NEW
 
 export const CSS_SELECTOR = {
   LOGIN_SCREEN: {
@@ -194,3 +194,7 @@ export const CSS_SELECTOR = {
     TABLE_ROWS: `tbody#tbd1 > tr[id*='row_']`,
   }
 };
+
+export const aSubNoRegex = /\w{1}\d{1}$/;
+export const subNoRegex = /-\d{2,}$/;
+export const otSubNoRegex = /^(\dOT)\d{5}(A\d{1,})$/;

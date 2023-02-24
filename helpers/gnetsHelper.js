@@ -1,10 +1,12 @@
 import axios from 'axios';
 import debug from 'debug';
 import fse from 'fs-extra';
+import { isEmpty } from 'lodash';
 import path from 'path';
-import { getFilesInFolder, getTrueAKeyNo, upsertDirectory } from '../knowhow';
+import { getFilesInFolder, getTrueAKeyNo, getTruePKeyNo, upsertDirectory } from '../knowhow';
 import { CSS_SELECTOR, newDwgDivValue } from './constants/drawingFileConstants';
 import { OPTIMIZED_WEB_VIEWPORT } from './constants/webConstant';
+import { checkFactoryDrawingByFile } from './drawingFileHelper';
 import Web from './webHelper';
 
 export const AVERAGE_LOGIN_DURATION = 0;
@@ -46,7 +48,7 @@ export default class GnetHelper extends Web {
     const nowUTCString = new Date().toUTCString();
     this.downloadFileOptions.headers.Cookie = `JSESSIONID=${this.sessionId}`;
     this.VIEW_PRINT_PAGE = `${this.gnetsUrl}/viewprint.do?inhouseDc={{inhouseDc}}&sessionId=${this.sessionId}`;
-    this.RELEASED_PAGE = `${this.gnetsUrl}/distributionstatuslist.do?sessionId=${this.sessionId}`
+    this.RELEASED_PAGE = `${this.gnetsUrl}/distributionstatuslist.do?releasedFlg=true&sessionId=${this.sessionId}`
     this.NO_RECEIVED_PAGE = `${this.gnetsUrl}/noreceivelist.do?sessionId=${this.sessionId}`;
     this.VIEW_FORMAT_POPUP = `${this.gnetsUrl}/viewformatselect.do?sessionId=${this.sessionId}`;
     this.DRAWING_DOWNLOAD_URL = `${this.gnetsUrl}/viewprint.do?inhouseDc={{inhouseDc}}&mode=PDF&date=${nowUTCString}&sessionId=${this.sessionId}`;
@@ -161,55 +163,65 @@ export default class GnetHelper extends Web {
 
   async getPreviousDrn(drawing, dir) {
     try {
-      const { aKeyNo } = drawing;
+      const { pKeyNo } = drawing;
 
       const releasedPage = await this.browser.newPage()
       await releasedPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
       await releasedPage.goto(this.RELEASED_PAGE);
 
-      const inputAKeyNo = getTrueAKeyNo(aKeyNo);
-
-      await releasedPage.$eval('#main', (form, keyNo) => {
+      const inputPKeyNo = getTruePKeyNo(pKeyNo);
+      await releasedPage.$eval('#main', (form, pKeyNo) => {
         form.mode.value = "search";
-        form.akeyNoS.value = "%" + keyNo;
+        form.newkeyNoS.value = "%" + pKeyNo;
         form.dateFrom.value = "";
         form.releasedFlg.value = "true";
         form.submit();
-      }, inputAKeyNo);
-      await releasedPage.waitForTimeout(2500);
+      }, inputPKeyNo);
+      await releasedPage.waitForTimeout(5000);
       const rows = await releasedPage.$$(RELEASED_PAGE_SELECTOR.TABLE_ROWS);
-      let result;
-
-      const newDwgDivExists = rows.some(async (row) => {
-        const id = await (await row.getProperty("id")).jsonValue();
-        if (String(id).match(/^row_\d{1,}/)) {
-          const dwgDivCell = await row.$("td:nth-child(7)");
-          const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
-          if (dwgDiv === newDwgDivValue) return true;
-          return false;
-        }
-      });
+      let result = {};
+      const rowRegex = /^row_\d{1,}$/;
+      let newDwgDivExists = false;
+      const trueRows = [];
 
       for (const row of rows) {
         const id = await (await row.getProperty("id")).jsonValue();
-        if (String(id).match(/^row_\d{1,}/)) {
-          const dwgDivCell = await row.$("td:nth-child(7)");
-          const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
-          if (newDwgDivExists ? (dwgDiv === newDwgDivValue) : true) {
-            const inhouseDcCell = await row.$("td:nth-child(2)");
-            const inhouseDc = String(await (await inhouseDcCell.getProperty('innerText')).jsonValue()).trim();
+        if (String(id).match(rowRegex)) {
+          trueRows.push(row);
+        }
+      }
 
-            const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
+      for (const row of trueRows) {
+        const dwgDivCell = await row.$("td:nth-child(7)");
+        const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
+        if (dwgDiv === newDwgDivValue) {
+          newDwgDivExists = true;
+          break;
+        };
+      }
+
+      for (const row of trueRows) {
+        const dwgDivCell = await row.$("td:nth-child(7)");
+        const dwgDiv = String(await (await dwgDivCell.getProperty('innerText')).jsonValue()).trim();
+        if ((!!newDwgDivExists && dwgDiv == newDwgDivValue) || !newDwgDivExists) {
+          const inhouseDcCell = await row.$("td:nth-child(2)");
+          const inhouseDc = String(await (await inhouseDcCell.getProperty('innerText')).jsonValue()).trim();
+
+          const drnURL = this.VIEW_DRN_PAGE.replace("{{inhouseDc}}", inhouseDc);
+          try {
             const prevDrawingBuffer = await axios.get(drnURL, this.downloadFileOptions);
             await upsertDirectory(dir);
             const prevDrnFilePath = path.resolve(dir, `${inhouseDc} - prevDrn.pdf`);
             fse.writeFileSync(prevDrnFilePath, prevDrawingBuffer.data);
-            result = {
-              filePath: prevDrnFilePath,
-              buffer: prevDrawingBuffer.data,
-              inhouseDc,
+            result = await checkFactoryDrawingByFile(prevDrnFilePath);
+            if (isEmpty(result)) {
+              continue;
             }
+            delete result.drawingRank;
+            delete result.categoryObj;
             break;
+          } catch (error) {
+            console.error(error);
           }
         }
       }

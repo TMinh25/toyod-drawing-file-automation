@@ -1,7 +1,7 @@
 import debug from 'debug';
 import { countBy, round } from 'lodash';
 import { OEM, PSM } from 'tesseract.js';
-import { getHighestSubCode, normalizeString } from '../knowhow';
+import { getHighestSubCode, getSubNumber, getTruePKeyNo, normalizeString } from '../knowhow';
 import {
   ANGLE_CHECKING_STEP,
   ASSEMBLY_ROW_INDEX,
@@ -16,10 +16,8 @@ import {
   MAX_VERTICAL_BLOCK_COUNT,
   MIN_BLOCK_HEIGHT,
   MIN_BLOCK_WIDTH,
-  MIN_ROTATED_ANGLE,
-  PDF_ZOOM_RATIO, RANK_REGION_LIST, SHIPPING_ROW_INDEX,
-  SITE_TABLE_REGION,
-  WHITE_PIXEL_RATE
+  MIN_ROTATED_ANGLE, PDF_ZOOM_RATIO, RANK_REGION_LIST, SHIPPING_ROW_INDEX,
+  SITE_TABLE_REGION, WHITE_PIXEL_RATE
 } from './constants/drawingFileConstants';
 import ImageHelper from './imageHelper';
 import OCRHelper from './ocrHelper';
@@ -51,9 +49,7 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   await tingsPage.goto(`https://tings.toyo-denso.co.jp/main/itemSearch/form/`, {
     timeout: 60000,
   });
-
-  const subNoRegex = /-\d{2,}$/
-  const partCode = pKeyNo.match(subNoRegex) ? pKeyNo.slice(0, 6) : pKeyNo;
+  const partCode = "%" + getTruePKeyNo(pKeyNo)
 
   await tingsPage.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partCode);
   const searchButton = await tingsPage.$(CSS_SELECTOR.TINGS.SEARCH_BUTTON);
@@ -95,18 +91,18 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   if (pKeyNoList.length > 0 && siteList.length > 0) {
     const highestSubCode = getHighestSubCode(pKeyNo, pKeyNoList);
     if (highestSubCode) {
-      const { pKeyNo, subNo, highestCode } = highestSubCode;
+      const { highestSub } = highestSubCode;
       const siteIndexes = []
       pKeyNoList.forEach((no, i) => {
-        if (no === highestCode) {
+        if (getSubNumber(no) === highestSub) {
           siteIndexes.push(i);
         };
       });
-      site = siteList.filter((v, i) => siteIndexes.includes(i));
+      site = [...new Set(siteList.filter((v, i) => siteIndexes.includes(i)))];
     } else {
       site = [...new Set(siteList)];
     }
-    return { factory: site, checked: true, isVNTec: site.length === 1 && site[0].toLowerCase() === "vntec" };
+    return { factory: site, checked: true, isVNTec: site.some(s => s.toLowerCase() === "vntec") };
   } else {
     autoBotDebugger("No tings result found!");
     return undefined;
@@ -142,7 +138,6 @@ export async function checkFactoryDrawingByFile(fullFilePath) {
 
 
     ({ tableRegion, factoryCodeList } = siteMetaData);
-
     // DEBUG START
 
     //for (const segmentedRegion of tableRegion) {
@@ -234,7 +229,7 @@ export async function siteOfDrawingSegmentInfo(buffer, rotatedAngle = 0) {
   await tesseractOcr.createWorker();
   await tesseractOcr.setParameters({
     tessedit_char_whitelist: FACTORY_CODE_CHAR_WHITELIST,
-    tessedit_pageseg_mode: PSM.SINGLE_LINE,
+    tessedit_pageseg_mode: PSM.SPARSE_TEXT,
     tessedit_ocr_engine_mode: OEM.TESSERACT_LSTM_COMBINED,
   });
 
@@ -340,6 +335,7 @@ export async function siteOfDrawingSegmentInfo(buffer, rotatedAngle = 0) {
         const cellBuffer = await cellImg.writeToBuffer();
         const { text } = await tesseractOcr.recognize(cellBuffer);
         factoryCodeList = String(text)
+          .replace(/\s{1,}/, '|') // replace space with |
           .replace(/\r?\n|\r|\|/g, '') // replace all unnecessary character
           .match(/.{2}/g); // split text into array of segments with 2 character
       }
