@@ -166,7 +166,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
           if (factory) {
             const result = { ...drawing, ...checkResult };
             const { categoryObj } = result;
-            if (isVNTec && (categoryObj["S1"] || categoryObj["MP"])) {
+            if (isVNTec && Boolean(categoryObj["S1"] || categoryObj["MP"])) {
               downloadDrawingList.push(result);
             }
             processedDrawings.push(result);
@@ -226,7 +226,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     }));
 
     await upsertDirectory(todayDrawingDirectory);
-
+    console.log(downloadDrawingList)
     for (const drawing of downloadDrawingList) {
       await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
     }
