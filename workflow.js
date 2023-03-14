@@ -100,7 +100,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     const todayDrawingDirectory = path.resolve(drawingsDir);
     upsertDirectory(todayTempDirectory);
 
-    const downloadDrawingList = [];
+    let downloadDrawingList = [];
 
     let loopCount = 0,
       processedDrawings = [],
@@ -162,13 +162,9 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
           checkResult.factory = replaceSiteNames(checkResult.factory, SITE_NAMES);
 
-          const { factory, isVNTec } = checkResult;
+          const { factory } = checkResult;
           if (factory) {
             const result = { ...drawing, ...checkResult };
-            const { categoryObj } = result;
-            if (isVNTec && Boolean(categoryObj["S1"] || categoryObj["MP"])) {
-              downloadDrawingList.push(result);
-            }
             processedDrawings.push(result);
           }
         } catch (error) {
@@ -177,10 +173,11 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         }
       }
     } while (!isEmpty(skippedDrawings) && loopCount < MAX_HISTORY_CHECK_FILES);
-
-    autoBotDebugger({ processedDrawings, skippedDrawings });
-
     const endTime = performance.now();
+
+    downloadDrawingList = processedDrawings.filter(({ isVNTec, categoryObj }) => Boolean(isVNTec) && Boolean(categoryObj["S1"] || categoryObj["MP"]));
+
+    autoBotDebugger({ processedDrawings, skippedDrawings, downloadDrawingList });
 
     if ([...processedDrawings, ...skippedDrawings].length > 0) {
       const todayExcelBuffer = await getTodayExcelWithSite(processedDrawings, drawingList, mergeRows);
@@ -226,7 +223,6 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     }));
 
     await upsertDirectory(todayDrawingDirectory);
-    console.log(downloadDrawingList)
     for (const drawing of downloadDrawingList) {
       await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
     }
