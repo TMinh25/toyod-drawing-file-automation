@@ -126,6 +126,13 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     let drawingList, mergeRows;
     if (todayExcelFile) {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
+      drawingList = [{
+        inhouseDc: 'MP20-01647-003',
+        aKeyNo: '2DC03086A7',
+        pKeyNo: 'A19140-07',
+        dwgNo: '5316A-GEY -7500',
+      }]
+      mergeRows = []
     }
 
     skippedDrawings = uniqBy(Array.from(drawingList), 'inhouseDc')
