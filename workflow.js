@@ -127,28 +127,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     let drawingList, mergeRows;
     if (todayExcelFile) {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
-      drawingList = [{
-        inhouseDc: 'MP20-01647-003',
-        aKeyNo: '2DC03086A7',
-        pKeyNo: 'A19140-07',
-        dwgNo: '5316A-GEY -7500',
-        dwgName: 'HOUSING ASSY,UND THROT',
-        dwgDiv: '設',
-        issue: 'Nod Seedadee',
-        dept: 'TTR',
-        release: new Date('2023/3/14')
-      }, {
-        inhouseDc: 'MP20-01647-004',
-        aKeyNo: '2DC03489A2',
-        pKeyNo: 'A30088-02',
-        dwgNo: '5316A-KWV -0000',
-        dwgName: 'HOUSING ASSY,UND THROT',
-        dwgDiv: '設',
-        issue: 'Nod Seedadee',
-        dept: 'TTR',
-        release: new Date('2023/3/14')
-      }]
-      mergeRows = []
+      // drawingList = []
+      // mergeRows = []
     }
 
     skippedDrawings = uniqBy(Array.from(drawingList), 'inhouseDc')
@@ -226,7 +206,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         Thời gian xử lý ${totalDrawingQty} bản vẽ: ${milisecondsToTimeFormat(endTime - startTime)}<br/>
         ${VNTecDrawings.length > 0 ? `Số lượng bản vẽ VNTec: ${VNTecDrawings.length}` : ""}<br/>
         ${skippedDrawings.length > 0 ? `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}` : ""}<br/>
-        ${crawlError ? `Lỗi kéo bản vẽ: ${crawlError.code} - ${crawlError.message}<br />` : '<br />'}`,
+        ${crawlError ? `Lỗi kéo bản vẽ: ${crawlError.message}<br />` : '<br />'}`,
         attachments,
       });
     }
