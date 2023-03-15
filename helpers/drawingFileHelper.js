@@ -49,6 +49,16 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   await tingsPage.goto(`https://tings.toyo-denso.co.jp/main/itemSearch/form/`, {
     timeout: 60000,
   });
+
+  tingsPage.on('error', error => {
+    autoBotDebugger('Error happen at the page: ', error);
+    return { error };
+  });
+
+  tingsPage.on('pageerror', error => {
+    autoBotDebugger('Page error occurred: ', error);
+    return { error };
+  })
   const partCode = "%" + getTruePKeyNo(pKeyNo)
 
   await tingsPage.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partCode);

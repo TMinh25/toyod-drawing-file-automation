@@ -104,7 +104,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
     let loopCount = 0,
       processedDrawings = [],
-      skippedDrawings = [];
+      skippedDrawings = [],
+      crawlError = undefined;
 
     const { BROWSER_OPTIONS, SITE_NAMES } = botInfo;
 
@@ -192,6 +193,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         } catch (error) {
           autoBotDebugger(`resulting error: ${error}`);
           skippedDrawings.push(drawing);
+          crawlError = error;
         }
       }
     } while (!isEmpty(skippedDrawings) && loopCount < MAX_HISTORY_CHECK_FILES);
@@ -223,7 +225,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         Tổng số bản vẽ được xử lý: ${totalDrawingQty}<br/>
         Thời gian xử lý ${totalDrawingQty} bản vẽ: ${milisecondsToTimeFormat(endTime - startTime)}<br/>
         ${VNTecDrawings.length > 0 ? `Số lượng bản vẽ VNTec: ${VNTecDrawings.length}` : ""}<br/>
-        ${skippedDrawings.length > 0 ? `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}` : ""}<br/>`,
+        ${skippedDrawings.length > 0 ? `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}` : ""}<br/>
+        ${crawlError ? `Lỗi kéo bản vẽ: ${crawlError.code} - ${crawlError.message}<br />` : '<br />'}`,
         attachments,
       });
     }
