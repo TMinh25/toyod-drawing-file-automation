@@ -64,8 +64,7 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   await tingsPage.type(CSS_SELECTOR.TINGS.PART_NO_INPUT, partCode);
   const searchButton = await tingsPage.$(CSS_SELECTOR.TINGS.SEARCH_BUTTON);
   await searchButton.click();
-  await tingsPage.waitForTimeout(15000);
-  // await tingsPage.waitForNavigation({ waitUntil: 'networkidle2' });
+  await tingsPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: '60000' });
 
   const totalRecordEle = await tingsPage.$(CSS_SELECTOR.TINGS.TOTAL_RECORD_ELE);
   let totalRecord = normalizeString(await (await totalRecordEle.getProperty('innerHTML')).jsonValue());
@@ -90,8 +89,7 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
       const nextPageButton = await totalRecordEle.$('a:nth-last-child(2)');
       if (nextPageButton) {
         await nextPageButton.click();
-        await tingsPage.waitForTimeout(15000);
-        // await tingsPage.waitForNavigation({ waitUntil: 'networkidle2' });
+        await tingsPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: '60000' });
       }
     }
     page++;
