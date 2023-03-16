@@ -149,9 +149,9 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
             const drnFilePath = await gnets.downloadDrnFile(inhouseDc, inhouseDir);
             checkResult = await checkFactoryDrawingByFile(drnFilePath);
             drawing = { ...drawing, ...checkResult }
-          } else if (loopCount < MAX_HISTORY_CHECK_FILES) { // Tải bản vẽ trước đó của bản vẽ
+          } else if (loopCount === 2) { // Tải bản vẽ trước đó của bản vẽ
             checkResult = await gnets.getPreviousDrn(drawing, todayTempDirectory);
-          } else if (loopCount === MAX_HISTORY_CHECK_FILES) { // Check trên tings
+          } else if (loopCount >= 3) { // Check trên tings
             checkResult = await checkFactoryDrawingOnTings(drawing, gnets);
           }
 
@@ -176,7 +176,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
           crawlError = error;
         }
       }
-    } while (!isEmpty(skippedDrawings) && loopCount < MAX_HISTORY_CHECK_FILES);
+    } while (!isEmpty(skippedDrawings) && loopCount < 4);
     const endTime = performance.now();
 
     downloadDrawingList = processedDrawings.filter(({ isVNTec, categoryObj }) => Boolean(isVNTec) && Boolean(categoryObj["S1"] || categoryObj["MP"]));
