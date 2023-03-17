@@ -236,6 +236,9 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.partName,
           row.size,
           row.cause,
+          (site && site.categoryObj) ? row.categoryObj["S0"] ? 'a' : undefined : '',
+          (site && site.categoryObj) ? row.categoryObj["TR"] ? 'a' : undefined : '',
+          (site && site.categoryObj) ? row.categoryObj["RC"] ? 'a' : undefined : '',
           site ? isArray(site.factory) ? site.factory.join(", ") : site.factory : '',
         ],
         'i+'
@@ -245,7 +248,7 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
     worksheet.spliceRows(2, 1);
 
     mergeRows.forEach((row) => {
-      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'V'].forEach((col) => {
+      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'V', 'W', 'X', 'Y'].forEach((col) => {
         worksheet.mergeCells(`${col}${row.start}:${col}${row.end}`);
       });
     });
