@@ -203,14 +203,6 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
     const worksheet = workbook.getWorksheet(1);
     let rowIndex = 2;
     for (const row of Array.from(drawingList).reverse()) {
-      // TODO: change site cell color for more vibrant cell
-      // can change cell color after insertRow
-      // if (row.factory === 'VT') {
-      //   worksheet.getCell(`V${rowIndex}`).fill = {
-      //     fgColor: { argb: 'F0F0F0F0' },
-      //   };
-      // }
-
       const site = data.find(a => a.inhouseDc === row.inhouseDc);
       worksheet.insertRow(
         3,
@@ -236,9 +228,9 @@ export async function getTodayExcelWithSite(data, drawingList, mergeRows) {
           row.partName,
           row.size,
           row.cause,
-          (site && site.categoryObj) ? row.categoryObj["S0"] ? 'a' : undefined : '',
-          (site && site.categoryObj) ? row.categoryObj["TR"] ? 'a' : undefined : '',
-          (site && site.categoryObj) ? row.categoryObj["RC"] ? 'a' : undefined : '',
+          (site && site.categoryObj) ? site.categoryObj["S0"] ? 'a' : undefined : '',
+          (site && site.categoryObj) ? site.categoryObj["TR"] ? 'a' : undefined : '',
+          (site && site.categoryObj) ? site.categoryObj["RC"] ? 'a' : undefined : '',
           site ? isArray(site.factory) ? site.factory.join(", ") : site.factory : '',
         ],
         'i+'
