@@ -120,6 +120,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     await gnets.login();
     const todayExcelFile = await gnets.getTodayExcel(todayTempDirectory);
 
+    let drawingList, mergeRows;
     if (!todayExcelFile) {
       autoBotDebugger("No unreceived drawings found!");
 
@@ -130,9 +131,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         attachments,
       });
       return { data: {} };
-    }
-    let drawingList, mergeRows;
-    if (todayExcelFile) {
+    } else {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
       // drawingList = [];
       // mergeRows = [];
