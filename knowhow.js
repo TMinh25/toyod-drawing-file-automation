@@ -181,10 +181,9 @@ export function getTodayExcelData(excelFilePath) {
 
       drawing.push(drawingRow);
     }
-    console.log(worksheet)
 
-    const mergeStartRowIndex = [...new Set(worksheet['!merges'].map((item) => item.s.r))];
-    const mergeEndRowIndex = [...new Set(worksheet['!merges'].map((item) => item.e.r))];
+    const mergeStartRowIndex = [...new Set(Array.from(worksheet['!merges'] || []).map((item) => item.s.r))];
+    const mergeEndRowIndex = [...new Set(Array.from(worksheet['!merges'] || []).map((item) => item.e.r))];
     const mergeRows = [];
     for (let i = 0; i < mergeStartRowIndex.length; i++) {
       mergeRows.push({ start: mergeStartRowIndex[i] + 1, end: mergeEndRowIndex[i] + 1 });
