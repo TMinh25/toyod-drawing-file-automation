@@ -129,7 +129,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}. <br/><br/>
         Ngày hôm nay GNetS không nhận được bản vẽ nào!`,
         attachments,
-      });
+      }, 15000);
       return { data: {} };
     } else {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
@@ -214,7 +214,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         ${skippedDrawings.length > 0 ? `Danh sách bản vẽ không tìm được nơi lắp ráp: <br/> ${skippedDrawingStringList}` : ""}<br/>
         ${crawlError ? `Lỗi kéo bản vẽ: ${crawlError.message}<br />` : '<br />'}`,
         attachments,
-      });
+      }, 15000);
     }
 
     await Promise.all([...processedDrawings, ...skippedDrawings].map(drawing => {

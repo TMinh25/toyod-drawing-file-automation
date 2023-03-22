@@ -57,7 +57,6 @@ class SMTP_Helper {
         if (err) {
           appBizDebugger(`Error when trying to send email: ${err}`);
           reject(err);
-          return;
         }
         appBizDebugger('Send mail success!', info);
         resolve(info);

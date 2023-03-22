@@ -259,15 +259,25 @@ var getDaysInMonth = function (month, year) {
   return Array.from({ length: daysInMonth }, (v, k) => k + 1)
 };
 
-export async function sendMail(NOREPLY_MAIL_SMTP, sendTo, data) {
+export function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  })
+}
+
+export async function sendMail(NOREPLY_MAIL_SMTP, sendTo, data, retryTimeout = 1000) {
   const smtp = new SMTP(NOREPLY_MAIL_SMTP);
   const { mailSubject, mailBody, attachments } = data;
-  for (let i = 0; i < 3; i++) { // retry sending mail 3 times
+  for (let i = 1; i <= 3; i++) { // retry sending mail 3 times
+    appBizDebugger(`Retrying ${i} time.`);
     try {
       await smtp.send(sendTo, [], mailSubject, mailBody, attachments);
+      break;
     } catch (error) {
-      appBizDebugger(`Sending mail error: ${error}\n\n  Retrying sending mail...`);
-      setTimeout(null, 15000);
+      appBizDebugger(`Sending mail error: ${error}`);
+      if (i < 3) {
+        await sleep(retryTimeout);
+      }
     }
   }
 }
