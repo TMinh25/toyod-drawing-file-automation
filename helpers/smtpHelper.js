@@ -52,7 +52,17 @@ class SMTP_Helper {
       attachments
     };
 
-    this.smtp.sendMail(mailOptions, callback);
+    return new Promise((resolve, reject) => {
+      this.smtp.sendMail(mailOptions, (err, info) => {
+        if (err) {
+          appBizDebugger(`Error when trying to send email: ${err}`);
+          reject(err);
+          return;
+        }
+        appBizDebugger('Send mail success!', info);
+        resolve(info);
+      });
+    })
   }
 };
 

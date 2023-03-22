@@ -262,12 +262,14 @@ var getDaysInMonth = function (month, year) {
 export async function sendMail(NOREPLY_MAIL_SMTP, sendTo, data) {
   const smtp = new SMTP(NOREPLY_MAIL_SMTP);
   const { mailSubject, mailBody, attachments } = data;
-  smtp.send(sendTo, [], mailSubject, mailBody, attachments, async (err, info) => {
-    if (err) {
-      appBizDebugger(`Error when trying to send email: ${err}`);
+  for (let i = 0; i < 3; i++) { // retry sending mail 3 times
+    try {
+      await smtp.send(sendTo, [], mailSubject, mailBody, attachments);
+    } catch (error) {
+      appBizDebugger(`Sending mail error: ${error}\n\n  Retrying sending mail...`);
+      setTimeout(null, 15000);
     }
-    appBizDebugger('Send mail success!', info);
-  });
+  }
 }
 
 export async function getCheckDrawingExcel(result, performer, poChecker) {
