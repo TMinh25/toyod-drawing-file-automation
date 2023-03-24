@@ -99,19 +99,19 @@ export async function checkFactoryDrawingOnTings(drawing, webHelper) {
   let site;
 
   if (pKeyNoList.length > 0 && siteList.length > 0) {
-    const highestSubCode = getHighestSubCode(pKeyNo, pKeyNoList);
-    if (highestSubCode) {
-      const { highestSub } = highestSubCode;
-      const siteIndexes = []
-      pKeyNoList.forEach((no, i) => {
-        if (getSubNumber(no) === highestSub) {
-          siteIndexes.push(i);
-        };
-      });
-      site = [...new Set(siteList.filter((v, i) => siteIndexes.includes(i)))];
-    } else {
-      site = [...new Set(siteList)];
-    }
+    // const highestSubCode = getHighestSubCode(pKeyNo, pKeyNoList);
+    // if (highestSubCode) {
+    //   const { highestSub } = highestSubCode;
+    //   const siteIndexes = []
+    //   pKeyNoList.forEach((no, i) => {
+    //     if (getSubNumber(no) === highestSub) {
+    //       siteIndexes.push(i);
+    //     };
+    //   });
+    //   site = [...new Set(siteList.filter((v, i) => siteIndexes.includes(i)))];
+    // } else {
+    site = [...new Set(siteList)];
+    // }
     return { factory: site, checked: true, isVNTec: site.some(s => s.toLowerCase() === "vntec") };
   } else {
     autoBotDebugger("No tings result found!");
