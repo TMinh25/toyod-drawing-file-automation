@@ -127,19 +127,21 @@ export default class GnetHelper extends Web {
       await popupPage.waitForTimeout(checkBoxes.length * 2500);
 
       const downloadURL = this.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);
+      autoBotDebugger(`url: ${downloadURL}`)
       const downloadRes = await axios.get(downloadURL, this.downloadFileOptions);
       drawing.dir = todayDrawingDirectory;
-      const drawingFilePath = path.resolve(todayDrawingDirectory, `${dwgNo} (${pKeyNo}).pdf`);
+      const fileName = `${dwgNo}${pKeyNo ? ` (${pKeyNo})` : ""}.pdf` 
+      const drawingFilePath = path.resolve(todayDrawingDirectory, );
       fse.writeFileSync(drawingFilePath, downloadRes.data);
       drawing.fullFilePath = drawingFilePath;
-      drawing.fileName = `${dwgNo} (${pKeyNo}).pdf`;
+      drawing.fileName = fileName;
       drawing.buffer = downloadRes.data;
       await Promise.all([drnPage.close(), popupPage.close()]);
 
       return {
         dir: todayDrawingDirectory,
         fullFilePath: drawingFilePath,
-        fileName: `${dwgNo} (${pKeyNo}).pdf`,
+        fileName,
         buffer: downloadRes.data,
       };
     } catch (error) {

@@ -234,6 +234,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
 
     await upsertDirectory(todayDrawingDirectory);
     for (const drawing of downloadDrawingList) {
+      autoBotDebugger(`Download drawing ${drawing.dwgNo}${drawing.pKeyNo ? `(${drawing.pKeyNo})` : ""}`)
       await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
     }
 
