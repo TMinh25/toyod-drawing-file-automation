@@ -128,7 +128,6 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         mailSubject: `Tổng hợp bản vẽ của ngày ${nowUserDateFormatted}`,
         mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}. <br/><br/>
         Ngày hôm nay GNetS không nhận được bản vẽ nào!`,
-        attachments,
       }, 15000);
       return { data: {} };
     } else {
