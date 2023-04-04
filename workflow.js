@@ -242,11 +242,17 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     error = error;
   }
 
-  await upsertDirectory(todayDrawingDirectory);
-  for (const drawing of downloadDrawingList) {
-    autoBotDebugger(`Download drawing ${drawing.dwgNo}${drawing.pKeyNo ? `(${drawing.pKeyNo})` : ""}`)
-    await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
+  try {
+    await upsertDirectory(todayDrawingDirectory);
+    for (const drawing of downloadDrawingList) {
+      autoBotDebugger(`Download drawing ${drawing.dwgNo}${drawing.pKeyNo ? `(${drawing.pKeyNo})` : ""}`)
+      await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
+    }
+  } catch (error) {
+    console.error(error);
+    error = error;
   }
+
   if (error) {
     return { error };
   }
