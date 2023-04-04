@@ -101,51 +101,50 @@ export default class GnetHelper extends Web {
 
   async downloadDrawingFile(drawing, todayDrawingDirectory) {
     try {
-      function getDrawingFile() {
-        return new Promise(async (resolve, reject) => {
-          try {
-            if (!this.isBrowserOpened()) {
-              this.login();
-            }
-            const { dwgNo, inhouseDc, pKeyNo } = drawing;
-
-            const drnPage = await this.browser.newPage();
-            await drnPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
-            const drawingURL = this.VIEW_PRINT_PAGE.replace("{{inhouseDc}}", inhouseDc);
-            await drnPage.goto(drawingURL);
-            const checkBoxes = await drnPage.$$('#main input[type=checkbox]');
-            for (const checkbox of checkBoxes) {
-              await checkbox.click();
-            }
-            await drnPage.$eval('#main', (form) => {
-              form.mode.value = 'view';
-              form.submit();
-            });
-            await drnPage.waitForTimeout(checkBoxes.length * 2500);
-
-            const popupPage = await this.browser.newPage();
-
-            await popupPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
-            await popupPage.goto(this.VIEW_FORMAT_POPUP);
-            await popupPage.waitForTimeout(checkBoxes.length * 2500);
-
-            const downloadURL = this.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);
-            autoBotDebugger(`url: ${downloadURL}`)
-            const downloadRes = await axios.get(downloadURL, this.downloadFileOptions);
-            drawing.dir = todayDrawingDirectory;
-            const fileName = `${dwgNo || ''}${pKeyNo ? ` (${pKeyNo})` : ''}.pdf`
-            const drawingFilePath = path.resolve(todayDrawingDirectory, fileName);
-            fse.writeFileSync(drawingFilePath, downloadRes.data);
-            drawing.fullFilePath = drawingFilePath;
-            drawing.fileName = fileName;
-            drawing.buffer = downloadRes.data;
-            await Promise.all([drnPage.close(), popupPage.close()]);
-            resolve({ drawingFilePath, fileName, buffer });
-          } catch (error) {
-            reject(error);
+      const web = this;
+      const getDrawingFile = new Promise(async (resolve, reject) => {
+        try {
+          if (!web.isBrowserOpened()) {
+            web.login();
           }
-        })
-      }
+          const { dwgNo, inhouseDc, pKeyNo } = drawing;
+
+          const drnPage = await web.browser.newPage();
+          await drnPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
+          const drawingURL = web.VIEW_PRINT_PAGE.replace("{{inhouseDc}}", inhouseDc);
+          await drnPage.goto(drawingURL);
+          const checkBoxes = await drnPage.$$('#main input[type=checkbox]');
+          for (const checkbox of checkBoxes) {
+            await checkbox.click();
+          }
+          await drnPage.$eval('#main', (form) => {
+            form.mode.value = 'view';
+            form.submit();
+          });
+          await drnPage.waitForTimeout(checkBoxes.length * 2500);
+
+          const popupPage = await web.browser.newPage();
+
+          await popupPage.setViewport(OPTIMIZED_WEB_VIEWPORT);
+          await popupPage.goto(web.VIEW_FORMAT_POPUP);
+          await popupPage.waitForTimeout(checkBoxes.length * 2500);
+
+          const downloadURL = web.DRAWING_DOWNLOAD_URL.replace("{{inhouseDc}}", inhouseDc);
+          autoBotDebugger(`url: ${downloadURL}`)
+          const downloadRes = await axios.get(downloadURL, web.downloadFileOptions);
+          drawing.dir = todayDrawingDirectory;
+          const fileName = `${dwgNo || ''}${pKeyNo ? ` (${pKeyNo})` : ''}.pdf`
+          const drawingFilePath = path.resolve(todayDrawingDirectory, fileName);
+          fse.writeFileSync(drawingFilePath, downloadRes.data);
+          drawing.fullFilePath = drawingFilePath;
+          drawing.fileName = fileName;
+          drawing.buffer = downloadRes.data;
+          await Promise.all([drnPage.close(), popupPage.close()]);
+          resolve({ drawingFilePath, fileName, buffer });
+        } catch (error) {
+          reject(error);
+        }
+      })
 
       const result = await retryIfError(3, getDrawingFile, 3000);
 
