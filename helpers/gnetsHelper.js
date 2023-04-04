@@ -131,7 +131,7 @@ export default class GnetHelper extends Web {
       const downloadRes = await axios.get(downloadURL, this.downloadFileOptions);
       drawing.dir = todayDrawingDirectory;
       const fileName = `${dwgNo}${pKeyNo ? ` (${pKeyNo})` : ""}.pdf` 
-      const drawingFilePath = path.resolve(todayDrawingDirectory, );
+      const drawingFilePath = path.resolve(todayDrawingDirectory, fileName);
       fse.writeFileSync(drawingFilePath, downloadRes.data);
       drawing.fullFilePath = drawingFilePath;
       drawing.fileName = fileName;
