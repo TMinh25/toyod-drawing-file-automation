@@ -140,7 +140,7 @@ export default class GnetHelper extends Web {
           drawing.fileName = fileName;
           drawing.buffer = downloadRes.data;
           await Promise.all([drnPage.close(), popupPage.close()]);
-          resolve({ drawingFilePath, fileName, buffer });
+          resolve({ drawingFilePath, fileName, buffer: downloadRes.data });
         } catch (error) {
           reject(error);
         }
