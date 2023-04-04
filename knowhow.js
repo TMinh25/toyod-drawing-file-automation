@@ -370,3 +370,30 @@ export const milisecondsToTimeFormat = (miliseconds) => {
 
   return ret;
 }
+
+/**
+ * Call an async function with a maximum time limit (in milliseconds) for the timeout
+ * @param {number} retryCount A integer number represent maximum the {func} function can be call.
+ * @param {function} func The function that need to be executed.
+ * @param {number} msBetweenRetry Number of milisecond between 2 times the function be called
+ * @returns {any} Resolved value of the {func} function
+ */
+
+export async function retryIfError(retryCount = 1, func = undefined, msBetweenRetry = 0) {
+  if (!func) throw new Error(`Function is not defined for retry!`);
+
+  for (let i = 1; i <= retryCount; i++) {
+    console.debug(`Retrying ${i} time.`);
+    try {
+      const result = await func();
+      return result;
+    } catch (error) {
+      console.error(`Call function ${String(func.name)}: ${error}`);
+      if (i < retryCount) {
+        await sleep(msBetweenRetry);
+      }
+    }
+  }
+
+  console.warn(`Retry ${retryCount} times but failed all!`)
+}
