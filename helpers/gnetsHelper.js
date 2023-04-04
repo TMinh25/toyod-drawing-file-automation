@@ -102,7 +102,7 @@ export default class GnetHelper extends Web {
   async downloadDrawingFile(drawing, todayDrawingDirectory) {
     try {
       const web = this;
-      const getDrawingFile = new Promise(async (resolve, reject) => {
+      const getDrawingFile = async () => new Promise(async (resolve, reject) => {
         try {
           if (!web.isBrowserOpened()) {
             web.login();
@@ -144,7 +144,7 @@ export default class GnetHelper extends Web {
         } catch (error) {
           reject(error);
         }
-      })
+      });
 
       const result = await retryIfError(3, getDrawingFile, 3000);
 
