@@ -130,15 +130,15 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       return {};
     } else {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
-      drawingList = [{
-        inhouseDc: "MP23-00381-003",
-        customerDc: "845WF0290",
-        aKeyNo: "4SW27627A4",
-        pKeyNo: "A46209-04",
-        dwgNo: "84250-08280-B-C1",
-        dwgName: "SWITCH ASSY,STEERING PAD",
-      }];
-      mergeRows = [];
+      // drawingList = [{
+      //   inhouseDc: "MP23-00381-003",
+      //   customerDc: "845WF0290",
+      //   aKeyNo: "4SW27627A4",
+      //   pKeyNo: "A46209-04",
+      //   dwgNo: "84250-08280-B-C1",
+      //   dwgName: "SWITCH ASSY,STEERING PAD",
+      // }];
+      // mergeRows = [];
     }
 
     skippedDrawings = uniqBy(Array.from(drawingList), 'inhouseDc')
