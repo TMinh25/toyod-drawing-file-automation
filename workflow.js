@@ -73,7 +73,10 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
   const tempDir = `./cache/temp/${format(now, 'YYYYMMDD')}`;
   const drawingsDir = `./cache/QLBV/${format(now, 'DD-MM-YYYY')}`;
 
-  let gnets;
+  let gnets, downloadDrawingList = [];
+
+  const todayTempDirectory = path.resolve(tempDir);
+  const todayDrawingDirectory = path.resolve(drawingsDir);
 
   try {
     autoBotDebugger('===========================');
@@ -95,12 +98,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     const encodedToken = Buffer.from(token).toString('base64');
 
     const api = new API();
-
-    const todayTempDirectory = path.resolve(tempDir);
-    const todayDrawingDirectory = path.resolve(drawingsDir);
     upsertDirectory(todayTempDirectory);
-
-    let downloadDrawingList = [];
 
     let loopCount = 0,
       processedDrawings = [],
@@ -232,12 +230,6 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       })
     }));
 
-    await upsertDirectory(todayDrawingDirectory);
-    for (const drawing of downloadDrawingList) {
-      autoBotDebugger(`Download drawing ${drawing.dwgNo}${drawing.pKeyNo ? `(${drawing.pKeyNo})` : ""}`)
-      await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
-    }
-
     if (gnets.isBrowserOpened()) {
       await gnets.closeBrowser();
     }
@@ -249,5 +241,11 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     }
     autoBotDebugger('error: ', error);
     return { error };
+  }
+
+  await upsertDirectory(todayDrawingDirectory);
+  for (const drawing of downloadDrawingList) {
+    autoBotDebugger(`Download drawing ${drawing.dwgNo}${drawing.pKeyNo ? `(${drawing.pKeyNo})` : ""}`)
+    await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
   }
 };
