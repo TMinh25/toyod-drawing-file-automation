@@ -73,7 +73,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
   const tempDir = `./cache/temp/${format(now, 'YYYYMMDD')}`;
   const drawingsDir = `./cache/QLBV/${format(now, 'DD-MM-YYYY')}`;
 
-  let gnets, downloadDrawingList = [];
+  let gnets, error, downloadDrawingList = [];
 
   const todayTempDirectory = path.resolve(tempDir);
   const todayDrawingDirectory = path.resolve(drawingsDir);
@@ -127,7 +127,7 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
         mailBody: `Hệ thống autobot xin gửi lại bạn danh sách bản vẽ của ngày ${nowUserDateFormatted}, vào lúc ${nowUserTimeFormatted}. <br/><br/>
         Ngày hôm nay GNetS không nhận được bản vẽ nào!`,
       }, 15000);
-      return { data: {} };
+      return {};
     } else {
       ({ drawing: drawingList, mergeRows } = getTodayExcelData(path.resolve(todayTempDirectory, todayExcelFile)));
       // drawingList = [];
@@ -234,13 +234,12 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       await gnets.closeBrowser();
     }
     removeFolder(todayTempDirectory, { force: true });
-    return { data: {} };
   } catch (error) {
     if (gnets.isBrowserOpened()) {
       gnets.closeBrowser()
     }
     autoBotDebugger('error: ', error);
-    return { error };
+    error = error;
   }
 
   await upsertDirectory(todayDrawingDirectory);
@@ -248,4 +247,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
     autoBotDebugger(`Download drawing ${drawing.dwgNo}${drawing.pKeyNo ? `(${drawing.pKeyNo})` : ""}`)
     await gnets.downloadDrawingFile(drawing, todayDrawingDirectory);
   }
+  if (error) {
+    return { error };
+  }
+  return {};
 };
