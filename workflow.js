@@ -230,14 +230,8 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
       })
     }));
 
-    if (gnets.isBrowserOpened()) {
-      await gnets.closeBrowser();
-    }
     removeFolder(todayTempDirectory, { force: true });
   } catch (error) {
-    if (gnets.isBrowserOpened()) {
-      gnets.closeBrowser()
-    }
     autoBotDebugger('error: ', error);
     error = error;
   }
@@ -251,6 +245,10 @@ export default async (payload, secretList, autobotCode, autobotSecret) => {
   } catch (error) {
     console.error(error);
     error = error;
+  }
+
+  if (gnets.isBrowserOpened()) {
+    gnets.closeBrowser()
   }
 
   if (error) {
